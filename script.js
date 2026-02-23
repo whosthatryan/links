@@ -35,13 +35,23 @@ function normalizeData() {
         
         // Ensure name/title are strings and never undefined
         let name = item.name;
-        if (typeof name !== 'string' || name === 'undefined' || name === 'null') {
+        if (typeof name !== 'string') {
+            name = String(name || '');
+            hasChanges = true;
+        }
+        // Clean up corrupted values like "undefined", "null", "undefinednull"
+        if (name === 'undefined' || name === 'null' || name === 'undefinednull' || name === 'nullundefined' || !name.trim()) {
             name = item.title || 'Untitled Group';
             hasChanges = true;
         }
         
         let title = item.title;
-        if (typeof title !== 'string' || title === 'undefined' || title === 'null') {
+        if (typeof title !== 'string') {
+            title = String(title || '');
+            hasChanges = true;
+        }
+        // Clean up corrupted values
+        if (title === 'undefined' || title === 'null' || title === 'undefinednull' || title === 'nullundefined' || !title.trim()) {
             title = name || 'Untitled';
             hasChanges = true;
         }
@@ -359,21 +369,28 @@ function moveItemToGroup(itemId, targetParentId) {
         return;
     }
     
-    // Prevent moving a group into itself
-    if (item.type === 'group' && itemId === targetParentId) {
-        showToast('Cannot move a group into itself!', 'error');
+    // Groups can only be at root level
+    if (item.type === 'group' && targetParentId !== null && targetParentId !== undefined) {
+        showToast('Groups can only exist at root level', 'error');
         closeMoveModal();
         return;
     }
     
-    // Prevent moving a group into its descendants
-    if (item.type === 'group' && targetParentId !== null && targetParentId !== undefined) {
-        const descendants = getAllDescendants(itemId);
-        if (descendants.some(d => d.id === targetParentId)) {
-            showToast('Cannot move a group into itself!', 'error');
+    // Only links can be moved into groups
+    if (item.type === 'link' && targetParentId !== null && targetParentId !== undefined) {
+        const targetGroup = getItemById(targetParentId);
+        if (!targetGroup || targetGroup.type !== 'group') {
+            showToast('Can only move links into groups', 'error');
             closeMoveModal();
             return;
         }
+    }
+    
+    // Don't move if already there
+    if (item.parentId === targetParentId) {
+        showToast('Item is already in this location', 'info');
+        closeMoveModal();
+        return;
     }
     
     item.parentId = targetParentId;
@@ -394,9 +411,16 @@ function openMoveModal(itemId) {
         return;
     }
     
-    const groups = getAllGroups().filter(g => g.id !== itemId); // Can't move into self
+    // Groups can only be at root level, so they don't get move options
+    if (item.type === 'group') {
+        showToast('Groups can only exist at root level', 'error');
+        closeMoveModal();
+        return;
+    }
     
-    // Build group options with indentation
+    const groups = getAllGroups(); // All groups are root level now
+    
+    // Build group options - flat list since no subgroups
     let html = `
         <div class="space-y-1">
             <button onclick="moveItemToGroup(${itemId}, null)" 
@@ -406,34 +430,23 @@ function openMoveModal(itemId) {
             </button>
     `;
     
-    function renderGroupOption(group, level) {
-        const indent = '  '.repeat(level);
+    // Render all groups at same level (no indentation needed)
+    groups.forEach(group => {
         const isCurrentParent = item.parentId === group.id;
         // Ensure group name is valid
         const groupName = (group.name && typeof group.name === 'string' && group.name !== 'undefined' && group.name !== 'null')
             ? group.name 
             : 'Untitled Group';
         const safeName = escapeHtml(groupName);
-        return `
+        html += `
             <button onclick="moveItemToGroup(${itemId}, ${group.id})" 
                     class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${isCurrentParent ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
-                <span class="inline-block text-slate-500">${indent}</span>
-                <i data-lucide="folder" class="w-4 h-4 inline mr-2 text-indigo-400"></i>
+                <i data-lucide="folder" class="w-4 h-4 inline mr-2 text-indigo-400 ml-2"></i>
                 ${safeName}
             </button>
         `;
-    }
+    });
     
-    // Render groups recursively
-    function addGroups(parentId, level) {
-        const children = groups.filter(g => g.parentId === parentId);
-        children.forEach(child => {
-            html += renderGroupOption(child, level);
-            addGroups(child.id, level + 1);
-        });
-    }
-    
-    addGroups(null, 0);
     html += '</div>';
     
     list.innerHTML = html;
@@ -546,10 +559,14 @@ function deleteItem(id) {
     if (item.type === 'group') {
         typeSpan.textContent = 'Group';
         const childCount = getAllDescendants(id).length;
-        // Ensure name is valid for display
-        const displayName = (item.name && typeof item.name === 'string' && item.name !== 'undefined' && item.name !== 'null')
-            ? item.name 
-            : 'Untitled Group';
+        // Ensure name is valid for display - handle all corruption cases
+        let displayName = 'Untitled Group';
+        if (item.name && typeof item.name === 'string') {
+            const cleanName = item.name.trim();
+            if (cleanName && cleanName !== 'undefined' && cleanName !== 'null' && cleanName !== 'undefinednull') {
+                displayName = cleanName;
+            }
+        }
         textP.textContent = `Delete "${displayName}" and all ${childCount} items inside? This action cannot be undone.`;
     } else {
         typeSpan.textContent = 'Link';
@@ -602,9 +619,7 @@ function confirmDelete() {
     }
 }
 
-function createSubgroup(parentId) {
-    createNewGroup(parentId);
-}
+// Subgroup functionality removed - groups can only exist at root level
 
 function clearAll() {
     if (confirm('Are you sure you want to delete all links and groups?')) {
@@ -736,9 +751,12 @@ function renderLinks() {
 }
 
 function renderItemsRecursive(parentId, level) {
-    // Handle both null and undefined as root identifiers
+    // At root level (parentId is null/undefined), render both groups and links
+    // Inside groups, only render links (no subgroups)
+    const isRoot = parentId === null || parentId === undefined;
+    
     const children = items.filter(item => {
-        if (parentId === null || parentId === undefined) {
+        if (isRoot) {
             return item.parentId === null || item.parentId === undefined;
         }
         return item.parentId === parentId;
@@ -749,13 +767,31 @@ function renderItemsRecursive(parentId, level) {
     let html = '';
     
     children.forEach((item, index) => {
-        const indentClass = `indent-level-${Math.min(level, 5)}`;
-        
         if (item.type === 'group') {
-            html += renderGroup(item, level, index, children.length);
+            // Only render groups at root level
+            if (isRoot) {
+                html += renderGroup(item, level, index, children.length);
+            }
+            // Skip subgroups - they shouldn't exist but ignore them if they do
         } else {
             html += renderLink(item, level, index, children.length);
         }
+    });
+    
+    return html;
+}
+
+// Render only links inside groups (no subgroups allowed)
+function renderGroupChildren(groupId) {
+    const children = items.filter(item => item.parentId === groupId && item.type === 'link');
+    
+    if (children.length === 0) {
+        return '<div class="text-center py-4 text-slate-500 text-sm italic">Drop links here</div>';
+    }
+    
+    let html = '';
+    children.forEach((item, index) => {
+        html += renderLink(item, 1, index, children.length);
     });
     
     return html;
@@ -774,6 +810,15 @@ function renderGroup(group, level, index, totalSiblings) {
     const safeName = escapeHtml(groupName);
     const safeJsName = escapeJsString(groupName);
     
+    // Only show expand/collapse if group has children
+    const expandButton = hasChildren ? `
+        <button onclick="toggleGroup(${group.id})" 
+                class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-slate-600 transition-colors text-slate-400 hover:text-white"
+                title="${group.isExpanded ? 'Collapse' : 'Expand'}">
+            <i data-lucide="${expandIcon}" class="w-4 h-4"></i>
+        </button>
+    ` : '<div class="w-6"></div>';
+    
     return `
         <div class="group-item ${indentClass}" data-id="${group.id}" data-type="group" draggable="true">
             <div class="bg-slate-800/90 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-200 overflow-hidden">
@@ -784,12 +829,7 @@ function renderGroup(group, level, index, totalSiblings) {
                         <i data-lucide="grip-vertical" class="w-4 h-4"></i>
                     </div>
                     
-                    <!-- Expand/Collapse -->
-                    <button onclick="toggleGroup(${group.id})" 
-                            class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-slate-600 transition-colors text-slate-400 hover:text-white"
-                            title="${group.isExpanded ? 'Collapse' : 'Expand'}">
-                        <i data-lucide="${expandIcon}" class="w-4 h-4"></i>
-                    </button>
+                    ${expandButton}
                     
                     <!-- Icon -->
                     <div class="flex-shrink-0 w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-400">
@@ -811,16 +851,6 @@ function renderGroup(group, level, index, totalSiblings) {
                     
                     <!-- Actions -->
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onclick="createSubgroup(${group.id})" 
-                                class="p-1.5 rounded hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-colors"
-                                title="Add subgroup">
-                            <i data-lucide="folder-plus" class="w-4 h-4"></i>
-                        </button>
-                        <button onclick="openMoveModal(${group.id})" 
-                                class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors"
-                                title="Move to group">
-                            <i data-lucide="folder-input" class="w-4 h-4"></i>
-                        </button>
                         <button onclick="deleteItem(${group.id})" 
                                 class="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
                                 title="Delete group">
@@ -829,9 +859,9 @@ function renderGroup(group, level, index, totalSiblings) {
                     </div>
                 </div>
                 
-                <!-- Children Container -->
+                <!-- Children Container - Only links allowed inside, no subgroups -->
                 <div class="group-children ${childrenClass} bg-slate-800/30">
-                    ${renderItemsRecursive(group.id, level + 1)}
+                    ${renderGroupChildren(group.id)}
                 </div>
             </div>
         </div>
@@ -843,15 +873,19 @@ function renderLink(link, level, index, totalSiblings) {
     const domain = getDomainFromURL(link.url) || 'Unknown';
     const isLong = link.url && link.url.length > 50;
     const displayUrl = isLong ? link.url.substring(0, 50) + '...' : (link.url || '');
-    // Ensure title is a valid string
-    const rawTitle = (link.title && typeof link.title === 'string' && link.title !== 'undefined' && link.title !== 'null')
-        ? link.title 
-        : domain;
-    const title = rawTitle || 'Untitled';
+    
+    // Ensure title is a valid string - handle all corruption cases
+    let title = link.title;
+    if (typeof title !== 'string') title = String(title || '');
+    if (title === 'undefined' || title === 'null' || title === 'undefinednull' || title === 'nullundefined' || !title.trim()) {
+        title = domain || 'Untitled';
+    }
+    
     const safeTitle = escapeHtml(title);
     const safeUrl = escapeHtml(link.url || '');
     const safeDisplayUrl = escapeHtml(displayUrl);
     const safeJsTitle = escapeJsString(title);
+    const safeJsUrl = escapeJsString(link.url || '');
     
     return `
         <div class="link-item ${indentClass} bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-700 hover:shadow-md hover:border-slate-600 transition-all duration-200 group" 
@@ -884,9 +918,9 @@ function renderLink(link, level, index, totalSiblings) {
                     </a>
                 </div>
                 
-                <!-- Actions -->
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onclick="copyToClipboard('${escapeJsString(link.url)}', this)" 
+                <!-- Actions - Always visible on mobile, hover on desktop -->
+                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity action-buttons">
+                    <button onclick="copyToClipboard('${safeJsUrl}', this)" 
                             class="p-1.5 rounded hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-colors"
                             title="Copy to clipboard">
                         <i data-lucide="copy" class="w-4 h-4"></i>
@@ -1108,31 +1142,27 @@ function handleGroupDrop(e) {
     
     if (!draggedItemData) return;
     
-    // Don't allow dropping onto itself
-    if (draggedId === targetGroupId) {
-        showToast('Cannot move an item into itself!', 'error');
+    // Don't allow dropping groups into groups (no subgroups)
+    if (draggedItemData.type === 'group') {
+        showToast('Groups can only exist at root level', 'error');
         return;
     }
     
-    // Don't allow dropping a parent group into its child
-    if (draggedItemData.type === 'group') {
-        const descendants = getAllDescendants(draggedId);
-        if (descendants.some(d => d.id === targetGroupId)) {
-            showToast('Cannot move a group into itself!', 'error');
-            return;
-        }
+    // Only links can be dropped into groups
+    if (draggedItemData.type !== 'link') {
+        return;
     }
     
-    // Don't allow dropping if item is already in this group (no change needed)
+    // Don't allow dropping if item is already in this group
     if (draggedItemData.parentId === targetGroupId) {
-        showToast('Item is already in this group', 'info');
+        showToast('Link is already in this group', 'info');
         return;
     }
     
     // Move item to the target group
     draggedItemData.parentId = targetGroupId;
     
-    // Remove from current position and add to end of items array (it will be rendered at the end of the group)
+    // Remove from current position and add to end
     const currentIndex = items.findIndex(i => i.id === draggedId);
     if (currentIndex > -1) {
         items.splice(currentIndex, 1);
@@ -1147,7 +1177,7 @@ function handleGroupDrop(e) {
     
     saveItems();
     renderLinks();
-    showToast(draggedItemData.type === 'group' ? 'Group moved successfully' : 'Link moved to group');
+    showToast('Link moved to group');
 }
 
 function saveItems() {
