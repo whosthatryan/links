@@ -1,27 +1,45 @@
 // State management - New hierarchical structure
-let items = JSON.parse(localStorage.getItem('quickLinks')) || [];
+let items = [];
+try {
+    const stored = localStorage.getItem('quickLinks');
+    if (stored) {
+        const parsed = JSON.parse(stored);
+        items = Array.isArray(parsed) ? parsed : [];
+    }
+} catch (e) {
+    console.error('Error loading from localStorage:', e);
+    items = [];
+}
 let deleteIndex = null;
 let deleteItemId = null;
 let currentParentId = null; // For creating subgroups
 let itemToMove = null; // For moving items between groups
+let toastTimeout = null; // Track toast timeout to prevent overlap
 
 // Migration from old flat structure to new hierarchical structure
 function migrateOldData() {
     const oldLinks = JSON.parse(localStorage.getItem('quickLinks')) || [];
-    if (oldLinks.length > 0 && oldLinks[0].url !== undefined) {
+    // Check if any items lack the 'type' property (old format detection)
+    const needsMigration = oldLinks.length > 0 && oldLinks.some(item => !item.type);
+    
+    if (needsMigration) {
         // Old format detected - convert to new format
-        const migrated = oldLinks.map(link => ({
-            ...link,
-            type: 'link',
-            parentId: null
+        const migrated = oldLinks.map(item => ({
+            ...item,
+            type: item.type || 'link', // Default to link if no type
+            parentId: item.parentId !== undefined ? item.parentId : null, // Ensure parentId exists
+            name: item.name || item.title || 'Untitled' // Ensure name exists for groups
         }));
         items = migrated;
         saveItems();
-        console.log('Migrated to new hierarchical format');
+        console.log('Migrated to new hierarchical format:', items.length, 'items');
+    } else if (oldLinks.length > 0) {
+        // Ensure items array is loaded with current data
+        items = oldLinks;
     }
 }
 
-// Initialize
+// Initialize - Single entry point
 document.addEventListener('DOMContentLoaded', () => {
     migrateOldData();
     renderLinks();
@@ -39,28 +57,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    renderLinks();
-    document.getElementById('linkInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('titleInput').focus();
-        }
-    });
-    document.getElementById('titleInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addLink();
-    });
-});
-
 // Validation and formatting
 function isValidURL(string) {
     try {
-        new URL(string);
+        const url = new URL(string);
+        // Prevent javascript: and data: protocols for security
+        const allowedProtocols = ['http:', 'https:'];
+        if (!allowedProtocols.includes(url.protocol)) {
+            return false;
+        }
         return true;
     } catch (_) {
         return false;
     }
+}
+
+// HTML escape utility to prevent XSS
+function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Escape for use in JavaScript strings within HTML attributes
+function escapeJsString(str) {
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
 function formatURL(url) {
@@ -81,19 +103,39 @@ function getDomainFromURL(url) {
 
 // Helper functions for hierarchical data
 function getChildren(parentId) {
+    // Handle both null and undefined parentId as root level
+    if (parentId === null || parentId === undefined) {
+        return items.filter(item => item.parentId === null || item.parentId === undefined);
+    }
     return items.filter(item => item.parentId === parentId);
 }
 
-function getAllDescendants(parentId) {
+function getAllDescendants(parentId, visited = new Set()) {
+    // Prevent infinite recursion from circular references
+    if (visited.has(parentId)) return [];
+    visited.add(parentId);
+    
     const descendants = [];
     const children = getChildren(parentId);
     descendants.push(...children);
     children.forEach(child => {
         if (child.type === 'group') {
-            descendants.push(...getAllDescendants(child.id));
+            descendants.push(...getAllDescendants(child.id, visited));
         }
     });
     return descendants;
+}
+
+// Helper to get item level in hierarchy (for indentation)
+function getItemLevel(id) {
+    let level = 0;
+    let current = getItemById(id);
+    while (current && current.parentId !== null && current.parentId !== undefined) {
+        level++;
+        current = getItemById(current.parentId);
+        if (level > 10) break; // Safety break for circular references
+    }
+    return level;
 }
 
 function getItemById(id) {
@@ -246,8 +288,14 @@ function moveItemToGroup(itemId, targetParentId) {
     const item = getItemById(itemId);
     if (!item) return;
     
-    // Prevent moving a group into itself or its descendants
-    if (item.type === 'group') {
+    // Prevent moving a group into itself
+    if (item.type === 'group' && itemId === targetParentId) {
+        showToast('Cannot move a group into itself!', 'error');
+        return;
+    }
+    
+    // Prevent moving a group into its descendants
+    if (item.type === 'group' && targetParentId !== null && targetParentId !== undefined) {
         const descendants = getAllDescendants(itemId);
         if (descendants.some(d => d.id === targetParentId)) {
             showToast('Cannot move a group into itself!', 'error');
@@ -283,12 +331,13 @@ function openMoveModal(itemId) {
     function renderGroupOption(group, level) {
         const indent = '  '.repeat(level);
         const isCurrentParent = item.parentId === group.id;
+        const safeName = escapeHtml(group.name);
         return `
             <button onclick="moveItemToGroup(${itemId}, ${group.id})" 
                     class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${isCurrentParent ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
                 <span class="inline-block text-slate-500">${indent}</span>
                 <i data-lucide="folder" class="w-4 h-4 inline mr-2 text-indigo-400"></i>
-                ${group.name}
+                ${safeName}
             </button>
         `;
     }
@@ -370,8 +419,12 @@ function startEditingTitle(id, currentTitle) {
     input.focus();
     input.select();
     
+    let saved = false;
+    
     // Save on blur or enter
     const saveEdit = () => {
+        if (saved) return;
+        saved = true;
         if (item.type === 'group') {
             editGroupName(id, input.value);
         } else {
@@ -379,13 +432,19 @@ function startEditingTitle(id, currentTitle) {
         }
     };
     
+    const cancelEdit = () => {
+        saved = true; // Prevent blur from saving
+        renderLinks();
+    };
+    
     input.addEventListener('blur', saveEdit);
-    input.addEventListener('keypress', (e) => {
+    input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             input.blur();
         }
         if (e.key === 'Escape') {
-            renderLinks(); // Cancel edit
+            e.preventDefault(); // Prevent blur from firing immediately
+            cancelEdit();
         }
     });
 }
@@ -438,15 +497,18 @@ function closeDeleteModal() {
 }
 
 function confirmDelete() {
-    if (deleteItemId !== null) {
+    if (deleteItemId !== null && deleteItemId !== undefined) {
         const item = getItemById(deleteItemId);
         if (item && item.type === 'group') {
             // Delete all descendants too
             const descendants = getAllDescendants(deleteItemId);
             const idsToDelete = [deleteItemId, ...descendants.map(d => d.id)];
             items = items.filter(i => !idsToDelete.includes(i.id));
-        } else {
+        } else if (deleteIndex >= 0 && deleteIndex < items.length) {
+            // Safety check: only delete if index is valid
             items.splice(deleteIndex, 1);
+        } else {
+            console.error('Delete failed: invalid index or item not found');
         }
         saveItems();
         renderLinks();
@@ -467,11 +529,11 @@ function clearAll() {
 }
 
 async function copyToClipboard(url, button) {
+    let originalHTML = button.innerHTML;
     try {
         await navigator.clipboard.writeText(url);
         
         // Visual feedback on button
-        const originalHTML = button.innerHTML;
         button.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span class="text-sm font-medium">Copied!</span>`;
         button.classList.remove('text-slate-400', 'hover:text-indigo-400', 'hover:bg-indigo-500/10');
         button.classList.add('text-emerald-400', 'bg-emerald-500/10', 'copied-animation');
@@ -491,13 +553,18 @@ async function copyToClipboard(url, button) {
     } catch (err) {
         console.error('Failed to copy:', err);
         // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = url;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showToast();
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = url;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast();
+        } catch (fallbackErr) {
+            console.error('Fallback copy failed:', fallbackErr);
+            showToast('Failed to copy', 'error');
+        }
     }
 }
 
@@ -513,6 +580,11 @@ function renderLinks() {
     const groupCount = document.getElementById('groupCount');
     const clearBtn = document.getElementById('clearAllBtn');
     const newGroupBtn = document.getElementById('newGroupBtn');
+    
+    // Ensure items is an array
+    if (!Array.isArray(items)) {
+        items = [];
+    }
     
     const links = items.filter(i => i.type === 'link');
     const groups = items.filter(i => i.type === 'group');
@@ -534,8 +606,25 @@ function renderLinks() {
     newGroupBtn.classList.remove('hidden');
     emptyState.classList.add('hidden');
     
-    // Render hierarchical structure
-    container.innerHTML = renderItemsRecursive(null, 0);
+    // Render hierarchical structure - get root items (null or undefined parentId)
+    const rootItems = items.filter(item => item.parentId === null || item.parentId === undefined);
+    
+    // If no root items but items exist, they might be orphaned - show them at root
+    let html = '';
+    if (rootItems.length === 0 && items.length > 0) {
+        // Fallback: render all items at root level to prevent disappearing
+        items.forEach((item, index) => {
+            if (item.type === 'group') {
+                html += renderGroup(item, 0, index, items.length);
+            } else {
+                html += renderLink(item, 0, index, items.length);
+            }
+        });
+    } else {
+        html = renderItemsRecursive(null, 0);
+    }
+    
+    container.innerHTML = html || renderItemsRecursive(null, 0);
     
     // Re-initialize icons
     lucide.createIcons();
@@ -545,7 +634,14 @@ function renderLinks() {
 }
 
 function renderItemsRecursive(parentId, level) {
-    const children = items.filter(item => item.parentId === parentId);
+    // Handle both null and undefined as root identifiers
+    const children = items.filter(item => {
+        if (parentId === null || parentId === undefined) {
+            return item.parentId === null || item.parentId === undefined;
+        }
+        return item.parentId === parentId;
+    });
+    
     if (children.length === 0) return '';
     
     let html = '';
@@ -569,6 +665,8 @@ function renderGroup(group, level, index, totalSiblings) {
     const hasChildren = children.length > 0;
     const expandIcon = group.isExpanded ? 'chevron-down' : 'chevron-right';
     const childrenClass = group.isExpanded ? 'expanded' : 'collapsed';
+    const safeName = escapeHtml(group.name);
+    const safeJsName = escapeJsString(group.name);
     
     return `
         <div class="group-item ${indentClass}" data-id="${group.id}" data-type="group" draggable="true">
@@ -595,9 +693,9 @@ function renderGroup(group, level, index, totalSiblings) {
                     <!-- Name -->
                     <div class="flex-1 min-w-0" id="title-container-${group.id}">
                         <div class="flex items-center gap-2">
-                            <h3 class="text-white font-semibold truncate" title="${group.name}">${group.name}</h3>
+                            <h3 class="text-white font-semibold truncate" title="${safeName}">${safeName}</h3>
                             <span class="text-xs text-slate-500 bg-slate-700/50 px-2 py-0.5 rounded-full">${getAllDescendants(group.id).length} items</span>
-                            <button onclick="startEditingTitle(${group.id}, '${group.name.replace(/'/g, "\\'")}')" 
+                            <button onclick="startEditingTitle(${group.id}, '${safeJsName}')" 
                                     class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400"
                                     title="Rename group">
                                 <i data-lucide="pencil" class="w-3 h-3"></i>
@@ -640,6 +738,10 @@ function renderLink(link, level, index, totalSiblings) {
     const isLong = link.url.length > 50;
     const displayUrl = isLong ? link.url.substring(0, 50) + '...' : link.url;
     const title = link.title || domain;
+    const safeTitle = escapeHtml(title);
+    const safeUrl = escapeHtml(link.url);
+    const safeDisplayUrl = escapeHtml(displayUrl);
+    const safeJsTitle = escapeJsString(title);
     
     return `
         <div class="link-item ${indentClass} bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-700 hover:shadow-md hover:border-slate-600 transition-all duration-200 group" 
@@ -658,23 +760,23 @@ function renderLink(link, level, index, totalSiblings) {
                 <!-- Link Info -->
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2" id="title-container-${link.id}">
-                        <h3 class="text-white font-semibold truncate text-sm" title="${title}">${title}</h3>
-                        <button onclick="startEditingTitle(${link.id}, '${title.replace(/'/g, "\\'")}')" 
+                        <h3 class="text-white font-semibold truncate text-sm" title="${safeTitle}">${safeTitle}</h3>
+                        <button onclick="startEditingTitle(${link.id}, '${safeJsTitle}')" 
                                 class="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400"
                                 title="Edit title">
                             <i data-lucide="pencil" class="w-3 h-3"></i>
                         </button>
                     </div>
-                    <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
+                    <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" 
                        class="block text-slate-400 text-xs truncate hover:text-indigo-400 transition-colors" 
-                       title="${link.url}">
-                        ${displayUrl}
+                       title="${safeUrl}">
+                        ${safeDisplayUrl}
                     </a>
                 </div>
                 
                 <!-- Actions -->
                 <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onclick="copyToClipboard('${link.url}', this)" 
+                    <button onclick="copyToClipboard('${escapeJsString(link.url)}', this)" 
                             class="p-1.5 rounded hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-colors"
                             title="Copy to clipboard">
                         <i data-lucide="copy" class="w-4 h-4"></i>
@@ -771,6 +873,8 @@ function handleDrop(e) {
     const draggedId = parseInt(draggedItem.dataset.id);
     const draggedItemData = getItemById(draggedId);
     
+    if (!draggedItemData) return;
+    
     // Get the drop target container's parent group ID
     let targetParentId = null;
     if (this.classList.contains('group-children')) {
@@ -780,8 +884,13 @@ function handleDrop(e) {
         }
     }
     
-    // Check if dropping a group into itself
-    if (draggedItemData.type === 'group') {
+    // Check if dropping a group into itself or its descendants
+    // Use explicit null/undefined checks since 0 is a valid ID (though unlikely with Date.now)
+    if (draggedItemData.type === 'group' && targetParentId !== null && targetParentId !== undefined) {
+        if (draggedId === targetParentId) {
+            showToast('Cannot move a group into itself!', 'error');
+            return;
+        }
         const descendants = getAllDescendants(draggedId);
         if (descendants.some(d => d.id === targetParentId)) {
             showToast('Cannot move a group into itself!', 'error');
@@ -792,23 +901,26 @@ function handleDrop(e) {
     // Find position
     const afterElement = getDragAfterElement(this, e.clientY);
     
-    // Update parent
+    // Update parent - explicitly set to null if root, otherwise to target group id
     draggedItemData.parentId = targetParentId;
     
-    // Reorder within the new parent's children
-    const siblings = items.filter(i => i.parentId === targetParentId && i.id !== draggedId);
+    // Remove from current position first
+    const currentIndex = items.findIndex(i => i.id === draggedId);
+    if (currentIndex > -1) {
+        items.splice(currentIndex, 1);
+    }
+    
+    // Insert at new position
     if (afterElement) {
         const afterId = parseInt(afterElement.dataset.id);
-        const afterIndex = siblings.findIndex(i => i.id === afterId);
-        // Remove from current position and insert at new position
-        const currentIndex = items.findIndex(i => i.id === draggedId);
-        items.splice(currentIndex, 1);
         const newIndex = items.findIndex(i => i.id === afterId);
-        items.splice(newIndex, 0, draggedItemData);
+        if (newIndex > -1) {
+            items.splice(newIndex, 0, draggedItemData);
+        } else {
+            items.push(draggedItemData);
+        }
     } else {
-        // Move to end
-        const currentIndex = items.findIndex(i => i.id === draggedId);
-        items.splice(currentIndex, 1);
+        // Move to end of array
         items.push(draggedItemData);
     }
     
@@ -841,6 +953,11 @@ function showToast(message = 'Copied to clipboard!', type = 'success') {
     const icon = toast.querySelector('i');
     const text = toast.querySelector('span');
     
+    // Clear previous timeout to prevent early dismissal
+    if (toastTimeout) {
+        clearTimeout(toastTimeout);
+    }
+    
     text.textContent = message;
     
     if (type === 'error') {
@@ -856,8 +973,9 @@ function showToast(message = 'Copied to clipboard!', type = 'success') {
     
     toast.classList.remove('translate-y-20', 'opacity-0');
     
-    setTimeout(() => {
+    toastTimeout = setTimeout(() => {
         toast.classList.add('translate-y-20', 'opacity-0');
+        toastTimeout = null;
     }, 2000);
 }
 
