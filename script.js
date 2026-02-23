@@ -16,6 +16,66 @@ let currentParentId = null; // For creating subgroups
 let itemToMove = null; // For moving items between groups
 let toastTimeout = null; // Track toast timeout to prevent overlap
 
+// Normalize data to fix common corruption issues
+function normalizeData() {
+    if (!Array.isArray(items)) {
+        items = [];
+        return;
+    }
+    
+    let hasChanges = false;
+    
+    items = items.map(item => {
+        // Fix parentId: ensure it's either a valid number ID or null (not string "null"/"undefined")
+        let parentId = item.parentId;
+        if (parentId === 'null' || parentId === 'undefined' || parentId === undefined) {
+            parentId = null;
+            hasChanges = true;
+        }
+        
+        // Ensure name/title are strings and never undefined
+        let name = item.name;
+        if (typeof name !== 'string' || name === 'undefined' || name === 'null') {
+            name = item.title || 'Untitled Group';
+            hasChanges = true;
+        }
+        
+        let title = item.title;
+        if (typeof title !== 'string' || title === 'undefined' || title === 'null') {
+            title = name || 'Untitled';
+            hasChanges = true;
+        }
+        
+        // Ensure type is valid
+        let type = item.type;
+        if (type !== 'link' && type !== 'group') {
+            type = item.url ? 'link' : 'group';
+            hasChanges = true;
+        }
+        
+        // Ensure id is a number
+        let id = item.id;
+        if (typeof id === 'string') {
+            id = parseInt(id) || Date.now();
+            hasChanges = true;
+        }
+        
+        return {
+            ...item,
+            id,
+            type,
+            name,
+            title,
+            parentId
+        };
+    });
+    
+    if (hasChanges) {
+        console.log('Data normalized - fixed corrupted values');
+        saveItems();
+    }
+}
+
 // Migration from old flat structure to new hierarchical structure
 function migrateOldData() {
     const oldLinks = JSON.parse(localStorage.getItem('quickLinks')) || [];
@@ -27,8 +87,9 @@ function migrateOldData() {
         const migrated = oldLinks.map(item => ({
             ...item,
             type: item.type || 'link', // Default to link if no type
-            parentId: item.parentId !== undefined ? item.parentId : null, // Ensure parentId exists
-            name: item.name || item.title || 'Untitled' // Ensure name exists for groups
+            parentId: item.parentId !== undefined && item.parentId !== 'undefined' && item.parentId !== 'null' ? item.parentId : null, // Ensure parentId exists
+            name: item.name || item.title || 'Untitled Group', // Ensure name exists for groups
+            title: item.title || item.name || 'Untitled' // Ensure title exists for links
         }));
         items = migrated;
         saveItems();
@@ -37,6 +98,9 @@ function migrateOldData() {
         // Ensure items array is loaded with current data
         items = oldLinks;
     }
+    
+    // Always run normalization to fix any data corruption
+    normalizeData();
 }
 
 // Initialize - Single entry point
@@ -82,6 +146,10 @@ function escapeHtml(text) {
 
 // Escape for use in JavaScript strings within HTML attributes
 function escapeJsString(str) {
+    // Ensure input is a string
+    if (typeof str !== 'string') {
+        str = String(str || '');
+    }
     return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
@@ -104,8 +172,13 @@ function getDomainFromURL(url) {
 // Helper functions for hierarchical data
 function getChildren(parentId) {
     // Handle both null and undefined parentId as root level
-    if (parentId === null || parentId === undefined) {
-        return items.filter(item => item.parentId === null || item.parentId === undefined);
+    // Also handle string "null" and "undefined" that might be in corrupted data
+    const isRootLevel = parentId === null || parentId === undefined;
+    if (isRootLevel) {
+        return items.filter(item => {
+            const itemParent = item.parentId;
+            return itemParent === null || itemParent === undefined;
+        });
     }
     return items.filter(item => item.parentId === parentId);
 }
@@ -316,13 +389,18 @@ function openMoveModal(itemId) {
     const list = document.getElementById('moveGroupList');
     
     const item = getItemById(itemId);
+    if (!item) {
+        closeMoveModal();
+        return;
+    }
+    
     const groups = getAllGroups().filter(g => g.id !== itemId); // Can't move into self
     
     // Build group options with indentation
     let html = `
         <div class="space-y-1">
             <button onclick="moveItemToGroup(${itemId}, null)" 
-                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${item.parentId === null ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${(item.parentId === null || item.parentId === undefined) ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
                 <i data-lucide="home" class="w-4 h-4 inline mr-2"></i>
                 Root (no group)
             </button>
@@ -331,7 +409,11 @@ function openMoveModal(itemId) {
     function renderGroupOption(group, level) {
         const indent = '  '.repeat(level);
         const isCurrentParent = item.parentId === group.id;
-        const safeName = escapeHtml(group.name);
+        // Ensure group name is valid
+        const groupName = (group.name && typeof group.name === 'string' && group.name !== 'undefined' && group.name !== 'null')
+            ? group.name 
+            : 'Untitled Group';
+        const safeName = escapeHtml(groupName);
         return `
             <button onclick="moveItemToGroup(${itemId}, ${group.id})" 
                     class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${isCurrentParent ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
@@ -464,7 +546,11 @@ function deleteItem(id) {
     if (item.type === 'group') {
         typeSpan.textContent = 'Group';
         const childCount = getAllDescendants(id).length;
-        textP.textContent = `Delete "${item.name}" and all ${childCount} items inside? This action cannot be undone.`;
+        // Ensure name is valid for display
+        const displayName = (item.name && typeof item.name === 'string' && item.name !== 'undefined' && item.name !== 'null')
+            ? item.name 
+            : 'Untitled Group';
+        textP.textContent = `Delete "${displayName}" and all ${childCount} items inside? This action cannot be undone.`;
     } else {
         typeSpan.textContent = 'Link';
         textP.textContent = 'Are you sure you want to remove this link? This action cannot be undone.';
@@ -681,8 +767,12 @@ function renderGroup(group, level, index, totalSiblings) {
     const hasChildren = children.length > 0;
     const expandIcon = group.isExpanded ? 'chevron-down' : 'chevron-right';
     const childrenClass = group.isExpanded ? 'expanded' : 'collapsed';
-    const safeName = escapeHtml(group.name);
-    const safeJsName = escapeJsString(group.name);
+    // Ensure group.name is a valid string
+    const groupName = (group.name && typeof group.name === 'string' && group.name !== 'undefined' && group.name !== 'null') 
+        ? group.name 
+        : 'Untitled Group';
+    const safeName = escapeHtml(groupName);
+    const safeJsName = escapeJsString(groupName);
     
     return `
         <div class="group-item ${indentClass}" data-id="${group.id}" data-type="group" draggable="true">
@@ -750,12 +840,16 @@ function renderGroup(group, level, index, totalSiblings) {
 
 function renderLink(link, level, index, totalSiblings) {
     const indentClass = `indent-level-${Math.min(level, 5)}`;
-    const domain = getDomainFromURL(link.url);
-    const isLong = link.url.length > 50;
-    const displayUrl = isLong ? link.url.substring(0, 50) + '...' : link.url;
-    const title = link.title || domain;
+    const domain = getDomainFromURL(link.url) || 'Unknown';
+    const isLong = link.url && link.url.length > 50;
+    const displayUrl = isLong ? link.url.substring(0, 50) + '...' : (link.url || '');
+    // Ensure title is a valid string
+    const rawTitle = (link.title && typeof link.title === 'string' && link.title !== 'undefined' && link.title !== 'null')
+        ? link.title 
+        : domain;
+    const title = rawTitle || 'Untitled';
     const safeTitle = escapeHtml(title);
-    const safeUrl = escapeHtml(link.url);
+    const safeUrl = escapeHtml(link.url || '');
     const safeDisplayUrl = escapeHtml(displayUrl);
     const safeJsTitle = escapeJsString(title);
     
@@ -910,7 +1004,8 @@ function handleDrop(e) {
     
     // Check if dropping a group into itself or its descendants
     // Use explicit null/undefined checks since 0 is a valid ID (though unlikely with Date.now)
-    if (draggedItemData.type === 'group' && targetParentId !== null && targetParentId !== undefined) {
+    const isValidTarget = targetParentId !== null && targetParentId !== undefined;
+    if (draggedItemData.type === 'group' && isValidTarget) {
         if (draggedId === targetParentId) {
             showToast('Cannot move a group into itself!', 'error');
             return;
@@ -1028,6 +1123,12 @@ function handleGroupDrop(e) {
         }
     }
     
+    // Don't allow dropping if item is already in this group (no change needed)
+    if (draggedItemData.parentId === targetGroupId) {
+        showToast('Item is already in this group', 'info');
+        return;
+    }
+    
     // Move item to the target group
     draggedItemData.parentId = targetGroupId;
     
@@ -1065,12 +1166,16 @@ function showToast(message = 'Copied to clipboard!', type = 'success') {
     
     text.textContent = message;
     
+    // Reset classes
+    toast.classList.remove('bg-emerald-500', 'bg-red-500', 'bg-blue-500');
+    
     if (type === 'error') {
-        toast.classList.remove('bg-emerald-500');
         toast.classList.add('bg-red-500');
         icon.setAttribute('data-lucide', 'x-circle');
+    } else if (type === 'info') {
+        toast.classList.add('bg-blue-500');
+        icon.setAttribute('data-lucide', 'info');
     } else {
-        toast.classList.remove('bg-red-500');
         toast.classList.add('bg-emerald-500');
         icon.setAttribute('data-lucide', 'check-circle');
     }
