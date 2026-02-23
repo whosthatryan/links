@@ -21,6 +21,23 @@
             animation: slideIn 0.3s ease-out;
         }
         
+        /* Ensure buttons are visible on touch devices */
+        @media (hover: none) {
+            .link-item .opacity-0,
+            .group-item .opacity-0 {
+                opacity: 1 !important;
+            }
+        }
+        
+        /* Ensure group-hover works properly */
+        .group:hover .group-hover\:opacity-100 {
+            opacity: 1;
+        }
+        
+        .group-item:hover .group-hover\:opacity-100 {
+            opacity: 1;
+        }
+        
         @keyframes slideIn {
             from {
                 opacity: 0;
@@ -124,7 +141,6 @@
                 <i data-lucide="link-2" class="w-8 h-8 text-white"></i>
             </div>
             <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">LINKS</h1>
-            <p class="text-slate-400">Store and copy your frequently used links instantly</p>
         </div>
 
         <!-- Input Section -->
