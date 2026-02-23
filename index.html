@@ -17,6 +17,10 @@
             animation: slideIn 0.3s ease-out;
         }
         
+        .group-item {
+            animation: slideIn 0.3s ease-out;
+        }
+        
         @keyframes slideIn {
             from {
                 opacity: 0;
@@ -43,17 +47,58 @@
         }
         
         ::-webkit-scrollbar-track {
-            background: #f1f5f9;
+            background: #1e293b;
         }
         
         ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+            background: #475569;
             border-radius: 4px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: #64748b;
         }
+        
+        /* Drag and Drop Styles */
+        .dragging {
+            opacity: 0.5;
+            transform: scale(1.02);
+        }
+        
+        .drag-over {
+            border: 2px dashed #6366f1 !important;
+            background: rgba(99, 102, 241, 0.1) !important;
+        }
+        
+        .drag-over-top {
+            border-top: 3px solid #6366f1 !important;
+        }
+        
+        .drag-over-bottom {
+            border-bottom: 3px solid #6366f1 !important;
+        }
+        
+        .group-children {
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+        }
+        
+        .group-children.collapsed {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+        
+        .group-children.expanded {
+            max-height: 10000px;
+            opacity: 1;
+        }
+        
+        .indent-level-0 { margin-left: 0; }
+        .indent-level-1 { margin-left: 1.5rem; }
+        .indent-level-2 { margin-left: 3rem; }
+        .indent-level-3 { margin-left: 4.5rem; }
+        .indent-level-4 { margin-left: 6rem; }
+        .indent-level-5 { margin-left: 7.5rem; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen text-slate-200">
@@ -117,20 +162,32 @@
         <!-- Stats Bar -->
         <div class="flex justify-between items-center mb-4 px-2">
             <span class="text-slate-400 font-medium">
-                <span id="linkCount" class="text-indigo-400 font-bold">0</span> links saved
+                <span id="linkCount" class="text-indigo-400 font-bold">0</span> links total
+                <span class="mx-2">•</span>
+                <span id="groupCount" class="text-indigo-400 font-bold">0</span> groups
             </span>
-            <button 
-                onclick="clearAll()" 
-                id="clearAllBtn"
-                class="text-sm text-slate-500 hover:text-red-400 transition-colors hidden flex items-center gap-1"
-            >
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                Clear all
-            </button>
+            <div class="flex items-center gap-2">
+                <button 
+                    onclick="createNewGroup()" 
+                    id="newGroupBtn"
+                    class="text-sm text-slate-400 hover:text-indigo-400 transition-colors hidden flex items-center gap-1"
+                >
+                    <i data-lucide="folder-plus" class="w-4 h-4"></i>
+                    New Group
+                </button>
+                <button 
+                    onclick="clearAll()" 
+                    id="clearAllBtn"
+                    class="text-sm text-slate-500 hover:text-red-400 transition-colors hidden flex items-center gap-1"
+                >
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    Clear all
+                </button>
+            </div>
         </div>
 
         <!-- Links List -->
-        <div id="linksContainer" class="space-y-3">
+        <div id="linksContainer" class="space-y-1 min-h-[200px]">
             <!-- Empty State -->
             <div id="emptyState" class="text-center py-16 bg-slate-800/50 backdrop-blur rounded-2xl border-2 border-dashed border-slate-700">
                 <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-700 rounded-full mb-3">
@@ -156,15 +213,65 @@
                 <div class="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center">
                     <i data-lucide="trash-2" class="w-5 h-5"></i>
                 </div>
-                <h3 class="text-lg font-bold text-white">Delete Link?</h3>
+                <h3 class="text-lg font-bold text-white">Delete <span id="deleteItemType">Link</span>?</h3>
             </div>
-            <p class="text-slate-400 mb-6">Are you sure you want to remove this link? This action cannot be undone.</p>
+            <p id="deleteModalText" class="text-slate-400 mb-6">Are you sure you want to remove this item? This action cannot be undone.</p>
             <div class="flex gap-3">
                 <button onclick="closeDeleteModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
                     Cancel
                 </button>
                 <button onclick="confirmDelete()" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">
                     Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Modal -->
+    <div id="groupModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="groupModalContent">
+            <div class="flex items-center gap-3 mb-4 text-indigo-400">
+                <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
+                    <i data-lucide="folder" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white" id="groupModalTitle">New Group</h3>
+            </div>
+            <div class="mb-6">
+                <label class="block text-slate-400 text-sm mb-2">Group Name</label>
+                <input 
+                    type="text" 
+                    id="groupNameInput" 
+                    placeholder="Enter group name..." 
+                    class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-white placeholder-slate-500"
+                >
+                <p id="groupModalSubtitle" class="text-slate-500 text-sm mt-2 hidden">This will be created as a subgroup</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeGroupModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
+                    Cancel
+                </button>
+                <button onclick="saveGroup()" class="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-colors font-medium">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Move to Group Modal -->
+    <div id="moveModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="moveModalContent">
+            <div class="flex items-center gap-3 mb-4 text-indigo-400">
+                <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
+                    <i data-lucide="folder-input" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">Move to Group</h3>
+            </div>
+            <div class="mb-6 max-h-60 overflow-y-auto" id="moveGroupList">
+                <!-- Groups will be listed here -->
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeMoveModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
+                    Cancel
                 </button>
             </div>
         </div>
