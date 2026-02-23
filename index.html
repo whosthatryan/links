@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINKS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .link-item {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .copied-animation {
+            animation: pop 0.2s ease-out;
+        }
+        
+        @keyframes pop {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen text-slate-200">
+
+    <!-- Main Container -->
+    <div class="max-w-3xl mx-auto px-4 py-12">
+        
+        <!-- Header -->
+        <div class="text-center mb-10">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-500 rounded-2xl shadow-lg mb-4 shadow-indigo-500/20">
+                <i data-lucide="link-2" class="w-8 h-8 text-white"></i>
+            </div>
+            <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">LINKS</h1>
+            <p class="text-slate-400">Store and copy your frequently used links instantly</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="bg-slate-800/80 backdrop-blur rounded-2xl shadow-lg p-6 mb-8 border border-slate-700">
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex-1 space-y-2">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-lucide="globe" class="w-5 h-5 text-slate-400"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            id="linkInput" 
+                            placeholder="Paste or type a link (e.g., https://example.com)" 
+                            class="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-200 placeholder-slate-500"
+                            autocomplete="off"
+                        >
+                    </div>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i data-lucide="type" class="w-5 h-5 text-slate-400"></i>
+                        </div>
+                        <input 
+                            type="text" 
+                            id="titleInput" 
+                            placeholder="Title (optional - defaults to website name)" 
+                            class="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-200 placeholder-slate-500 text-sm"
+                            autocomplete="off"
+                        >
+                    </div>
+                </div>
+                <button 
+                    onclick="addLink()" 
+                    id="addBtn"
+                    class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-indigo-500/25 active:scale-95"
+                >
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <span>Add Link</span>
+                </button>
+            </div>
+            <p id="errorMsg" class="text-red-400 text-sm mt-2 hidden flex items-center gap-1">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                <span>Please enter a valid URL</span>
+            </p>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="flex justify-between items-center mb-4 px-2">
+            <span class="text-slate-400 font-medium">
+                <span id="linkCount" class="text-indigo-400 font-bold">0</span> links saved
+            </span>
+            <button 
+                onclick="clearAll()" 
+                id="clearAllBtn"
+                class="text-sm text-slate-500 hover:text-red-400 transition-colors hidden flex items-center gap-1"
+            >
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                Clear all
+            </button>
+        </div>
+
+        <!-- Links List -->
+        <div id="linksContainer" class="space-y-3">
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-16 bg-slate-800/50 backdrop-blur rounded-2xl border-2 border-dashed border-slate-700">
+                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-700 rounded-full mb-3">
+                    <i data-lucide="link" class="w-6 h-6 text-slate-500"></i>
+                </div>
+                <p class="text-slate-400 font-medium">No links added yet</p>
+                <p class="text-slate-500 text-sm mt-1">Add your first link above to get started</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
+        <i data-lucide="check-circle" class="w-5 h-5"></i>
+        <span class="font-medium">Copied to clipboard!</span>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="deleteModalContent">
+            <div class="flex items-center gap-3 mb-4 text-red-400">
+                <div class="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">Delete Link?</h3>
+            </div>
+            <p class="text-slate-400 mb-6">Are you sure you want to remove this link? This action cannot be undone.</p>
+            <div class="flex gap-3">
+                <button onclick="closeDeleteModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
+                    Cancel
+                </button>
+                <button onclick="confirmDelete()" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
