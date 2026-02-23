@@ -1,5 +1,5 @@
 ---
-title: LINKS
+title: DeepSite Project
 colorFrom: blue
 colorTo: purple
 sdk: static
