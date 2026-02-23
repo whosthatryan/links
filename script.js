@@ -254,16 +254,11 @@ function closeGroupModal() {
 
 function saveGroup() {
     const name = document.getElementById('groupNameInput').value.trim();
-    if (!name) {
-        document.getElementById('groupNameInput').classList.add('border-red-500');
-        setTimeout(() => document.getElementById('groupNameInput').classList.remove('border-red-500'), 2000);
-        return;
-    }
     
     const newGroup = {
         id: Date.now(),
         type: 'group',
-        name: name,
+        name: name || 'Untitled Group',
         parentId: currentParentId,
         isExpanded: true,
         createdAt: new Date().toISOString()
@@ -286,11 +281,15 @@ function toggleGroup(groupId) {
 
 function moveItemToGroup(itemId, targetParentId) {
     const item = getItemById(itemId);
-    if (!item) return;
+    if (!item) {
+        closeMoveModal();
+        return;
+    }
     
     // Prevent moving a group into itself
     if (item.type === 'group' && itemId === targetParentId) {
         showToast('Cannot move a group into itself!', 'error');
+        closeMoveModal();
         return;
     }
     
@@ -299,6 +298,7 @@ function moveItemToGroup(itemId, targetParentId) {
         const descendants = getAllDescendants(itemId);
         if (descendants.some(d => d.id === targetParentId)) {
             showToast('Cannot move a group into itself!', 'error');
+            closeMoveModal();
             return;
         }
     }
@@ -575,7 +575,7 @@ let dragOverPosition = null; // 'before' or 'after'
 
 function renderLinks() {
     const container = document.getElementById('linksContainer');
-    const emptyState = document.getElementById('emptyState');
+    let emptyState = document.getElementById('emptyState');
     const linkCount = document.getElementById('linkCount');
     const groupCount = document.getElementById('groupCount');
     const clearBtn = document.getElementById('clearAllBtn');
@@ -595,16 +595,32 @@ function renderLinks() {
     
     if (items.length === 0) {
         container.innerHTML = '';
+        // If emptyState was destroyed by previous innerHTML, recreate it
+        if (!emptyState) {
+            emptyState = document.createElement('div');
+            emptyState.id = 'emptyState';
+            emptyState.className = 'text-center py-16 bg-slate-800/50 backdrop-blur rounded-2xl border-2 border-dashed border-slate-700';
+            emptyState.innerHTML = `
+                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-700 rounded-full mb-3">
+                    <i data-lucide="link" class="w-6 h-6 text-slate-500"></i>
+                </div>
+                <p class="text-slate-400 font-medium">No links added yet</p>
+                <p class="text-slate-500 text-sm mt-1">Add your first link above to get started</p>
+            `;
+        }
         container.appendChild(emptyState);
         emptyState.classList.remove('hidden');
         clearBtn.classList.add('hidden');
         newGroupBtn.classList.add('hidden');
+        lucide.createIcons();
         return;
     }
     
     clearBtn.classList.remove('hidden');
     newGroupBtn.classList.remove('hidden');
-    emptyState.classList.add('hidden');
+    if (emptyState) {
+        emptyState.classList.add('hidden');
+    }
     
     // Render hierarchical structure - get root items (null or undefined parentId)
     const rootItems = items.filter(item => item.parentId === null || item.parentId === undefined);
@@ -801,6 +817,7 @@ function renderLink(link, level, index, totalSiblings) {
 function initializeDragAndDrop() {
     const draggables = document.querySelectorAll('[draggable="true"]');
     const containers = document.querySelectorAll('#linksContainer, .group-children');
+    const groupHeaders = document.querySelectorAll('.group-item');
     
     draggables.forEach(draggable => {
         draggable.addEventListener('dragstart', handleDragStart);
@@ -811,6 +828,13 @@ function initializeDragAndDrop() {
         container.addEventListener('dragover', handleDragOver);
         container.addEventListener('dragleave', handleDragLeave);
         container.addEventListener('drop', handleDrop);
+    });
+    
+    // Allow dropping on group headers to move items into that group
+    groupHeaders.forEach(group => {
+        group.addEventListener('dragover', handleGroupDragOver);
+        group.addEventListener('dragleave', handleGroupDragLeave);
+        group.addEventListener('drop', handleGroupDrop);
     });
 }
 
@@ -942,6 +966,87 @@ function getDragAfterElement(container, y) {
             return closest;
         }
     }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+// Group-specific drag handlers for dropping onto group headers
+function handleGroupDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedItem) return;
+    
+    // Don't allow dropping a group onto itself
+    const draggedId = parseInt(draggedItem.dataset.id);
+    const targetGroupId = parseInt(this.dataset.id);
+    
+    if (draggedId === targetGroupId) return;
+    
+    // Don't allow dropping a parent group onto its child
+    const draggedItemData = getItemById(draggedId);
+    if (draggedItemData && draggedItemData.type === 'group') {
+        const descendants = getAllDescendants(draggedId);
+        if (descendants.some(d => d.id === targetGroupId)) {
+            return;
+        }
+    }
+    
+    // Add visual indicator that this is a drop target
+    this.classList.add('drag-over-group');
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function handleGroupDragLeave(e) {
+    this.classList.remove('drag-over-group');
+}
+
+function handleGroupDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    this.classList.remove('drag-over-group');
+    
+    if (!draggedItem) return;
+    
+    const draggedId = parseInt(draggedItem.dataset.id);
+    const targetGroupId = parseInt(this.dataset.id);
+    const draggedItemData = getItemById(draggedId);
+    
+    if (!draggedItemData) return;
+    
+    // Don't allow dropping onto itself
+    if (draggedId === targetGroupId) {
+        showToast('Cannot move an item into itself!', 'error');
+        return;
+    }
+    
+    // Don't allow dropping a parent group into its child
+    if (draggedItemData.type === 'group') {
+        const descendants = getAllDescendants(draggedId);
+        if (descendants.some(d => d.id === targetGroupId)) {
+            showToast('Cannot move a group into itself!', 'error');
+            return;
+        }
+    }
+    
+    // Move item to the target group
+    draggedItemData.parentId = targetGroupId;
+    
+    // Remove from current position and add to end of items array (it will be rendered at the end of the group)
+    const currentIndex = items.findIndex(i => i.id === draggedId);
+    if (currentIndex > -1) {
+        items.splice(currentIndex, 1);
+    }
+    items.push(draggedItemData);
+    
+    // Expand the target group to show the new item
+    const targetGroup = getItemById(targetGroupId);
+    if (targetGroup) {
+        targetGroup.isExpanded = true;
+    }
+    
+    saveItems();
+    renderLinks();
+    showToast(draggedItemData.type === 'group' ? 'Group moved successfully' : 'Link moved to group');
 }
 
 function saveItems() {
