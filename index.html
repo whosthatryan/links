@@ -136,11 +136,51 @@
     <div class="max-w-3xl mx-auto px-4 py-12">
         
         <!-- Header -->
-        <div class="text-center mb-10">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-500 rounded-2xl shadow-lg mb-4 shadow-indigo-500/20">
-                <i data-lucide="link-2" class="w-8 h-8 text-white"></i>
+        <div class="flex items-center justify-between mb-10">
+            <div class="flex-1 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-500 rounded-2xl shadow-lg mb-4 shadow-indigo-500/20">
+                    <i data-lucide="link-2" class="w-8 h-8 text-white"></i>
+                </div>
+                <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">LINKS</h1>
+                <p class="text-slate-400">Store and copy your frequently used links instantly</p>
             </div>
-            <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">LINKS</h1>
+            
+            <!-- Auth Buttons - Upper Right -->
+            <div class="absolute top-6 right-6 flex items-center gap-3">
+                <div id="authButtons" class="flex items-center gap-2">
+                    <button 
+                        onclick="showAuthModal()" 
+                        id="loginBtn"
+                        class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-medium transition-all border border-slate-600 hover:border-indigo-500/50 flex items-center gap-2"
+                    >
+                        <i data-lucide="log-in" class="w-4 h-4"></i>
+                        Login
+                    </button>
+                    <button 
+                        onclick="showAuthModal(); toggleAuthMode();" 
+                        id="registerBtn"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+                    >
+                        <i data-lucide="user-plus" class="w-4 h-4"></i>
+                        Register
+                    </button>
+                </div>
+                <div id="userInfo" class="hidden flex items-center gap-3 bg-slate-800/80 rounded-lg px-3 py-2 border border-slate-700">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                            <i data-lucide="user" class="w-4 h-4 text-indigo-400"></i>
+                        </div>
+                        <span id="userEmail" class="text-sm text-slate-300 max-w-[150px] truncate"></span>
+                    </div>
+                    <button 
+                        onclick="logout()" 
+                        class="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                        title="Logout"
+                    >
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Input Section -->
@@ -199,16 +239,18 @@
 
         <!-- Stats Bar -->
         <div class="flex justify-between items-center mb-4 px-2">
-            <span class="text-slate-400 font-medium">
-                <span id="linkCount" class="text-indigo-400 font-bold">0</span> links total
-                <span class="mx-2">•</span>
+            <span class="text-slate-400 font-medium flex items-center gap-2">
+                <span id="linkCount" class="text-indigo-400 font-bold">0</span> links
+                <span class="text-slate-600">|</span>
                 <span id="groupCount" class="text-indigo-400 font-bold">0</span> groups
+                <span class="text-slate-600">|</span>
+                <span id="syncStatus" class="text-slate-500 text-xs bg-slate-800 px-2 py-1 rounded">Local only</span>
             </span>
             <div class="flex items-center gap-2">
                 <button 
                     onclick="createNewGroup()" 
                     id="newGroupBtn"
-                    class="text-sm text-slate-400 hover:text-indigo-400 transition-colors hidden flex items-center gap-1"
+                    class="text-sm text-slate-400 hover:text-indigo-400 transition-colors hidden flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-slate-800"
                 >
                     <i data-lucide="folder-plus" class="w-4 h-4"></i>
                     New Group
@@ -216,7 +258,7 @@
                 <button 
                     onclick="clearAll()" 
                     id="clearAllBtn"
-                    class="text-sm text-slate-500 hover:text-red-400 transition-colors hidden flex items-center gap-1"
+                    class="text-sm text-slate-500 hover:text-red-400 transition-colors hidden flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-slate-800"
                 >
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                     Clear all
@@ -315,9 +357,79 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
-    <script>
-        lucide.createIcons();
+    <!-- Auth Modal -->
+    <div id="authModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="authModalContent">
+            <div class="flex items-center gap-3 mb-4 text-indigo-400">
+                <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
+                    <i data-lucide="user" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white" id="authModalTitle">Login</h3>
+            </div>
+            
+            <div class="space-y-3 mb-6">
+                <div>
+                    <label class="block text-slate-400 text-sm mb-1">Email</label>
+                    <input 
+                        type="email" 
+                        id="authEmail" 
+                        placeholder="Enter your email..." 
+                        class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-white placeholder-slate-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-slate-400 text-sm mb-1">Password</label>
+                    <input 
+                        type="password" 
+                        id="authPassword" 
+                        placeholder="Enter your password..." 
+                        class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-white placeholder-slate-500"
+                    >
+                </div>
+                <p id="authError" class="text-red-400 text-sm hidden"></p>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="closeAuthModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
+                    Cancel
+                </button>
+                <button onclick="handleAuth()" id="authActionBtn" class="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-colors font-medium">
+                    Login
+                </button>
+            </div>
+            
+            <div class="mt-4 text-center">
+                <button onclick="toggleAuthMode()" id="authToggleBtn" class="text-sm text-slate-400 hover:text-indigo-400 transition-colors">
+                    Don't have an account? Register
+                </button>
+            </div>
+        </div>
+    </div>
+
+   <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-analytics.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkgua27JXdyJQaOxflB4QuVbjX1zRDuag",
+            authDomain: "links-25539.firebaseapp.com",
+            projectId: "links-25539",
+            storageBucket: "links-25539.firebasestorage.app",
+            messagingSenderId: "263012790691",
+            appId: "1:263012790691:web:752314c03c0d6eafc36a16",
+            measurementId: "G-TM7S5967ML"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
     </script>
+    
+    <script src="script.js"></script>
 </body>
 </html>
