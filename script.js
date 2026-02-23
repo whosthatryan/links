@@ -39,9 +39,11 @@ function normalizeData() {
             name = String(name || '');
             hasChanges = true;
         }
-        // Clean up corrupted values like "undefined", "null", "undefinednull"
-        if (name === 'undefined' || name === 'null' || name === 'undefinednull' || name === 'nullundefined' || !name.trim()) {
-            name = item.title || 'Untitled Group';
+        // Clean up corrupted values like "undefined", "null", "undefinednull", etc.
+        const isCorruptedName = (val) => !val || val === 'undefined' || val === 'null' || val === 'undefinednull' || val === 'nullundefined' || val === 'undefined null' || val === 'null undefined';
+        
+        if (isCorruptedName(name)) {
+            name = (title && !isCorruptedName(title)) ? title : 'Untitled Group';
             hasChanges = true;
         }
         
@@ -51,8 +53,8 @@ function normalizeData() {
             hasChanges = true;
         }
         // Clean up corrupted values
-        if (title === 'undefined' || title === 'null' || title === 'undefinednull' || title === 'nullundefined' || !title.trim()) {
-            title = name || 'Untitled';
+        if (isCorruptedName(title)) {
+            title = (name && !isCorruptedName(name)) ? name : 'Untitled';
             hasChanges = true;
         }
         
@@ -803,10 +805,14 @@ function renderGroup(group, level, index, totalSiblings) {
     const hasChildren = children.length > 0;
     const expandIcon = group.isExpanded ? 'chevron-down' : 'chevron-right';
     const childrenClass = group.isExpanded ? 'expanded' : 'collapsed';
-    // Ensure group.name is a valid string
-    const groupName = (group.name && typeof group.name === 'string' && group.name !== 'undefined' && group.name !== 'null') 
-        ? group.name 
-        : 'Untitled Group';
+    // Ensure group.name is a valid string - handle all corruption cases including "undefinednull"
+    let groupName = group.name;
+    if (typeof groupName !== 'string') {
+        groupName = String(groupName || '');
+    }
+    if (!groupName || groupName === 'undefined' || groupName === 'null' || groupName === 'undefinednull' || groupName === 'nullundefined' || !groupName.trim()) {
+        groupName = 'Untitled Group';
+    }
     const safeName = escapeHtml(groupName);
     const safeJsName = escapeJsString(groupName);
     
@@ -958,7 +964,9 @@ function initializeDragAndDrop() {
         container.addEventListener('drop', handleDrop);
     });
     
-    // Allow dropping on group headers to move items into that group
+    // Allow dropping on group headers to move links into that group
+    // Note: Groups themselves can be dragged (for reordering at root level),
+    // but can only be dropped on the root container, not on other groups
     groupHeaders.forEach(group => {
         group.addEventListener('dragover', handleGroupDragOver);
         group.addEventListener('dragleave', handleGroupDragLeave);
@@ -1104,19 +1112,25 @@ function handleGroupDragOver(e) {
     
     if (!draggedItem) return;
     
-    // Don't allow dropping a group onto itself
     const draggedId = parseInt(draggedItem.dataset.id);
     const targetGroupId = parseInt(this.dataset.id);
+    const draggedItemData = getItemById(draggedId);
     
+    if (!draggedItemData) return;
+    
+    // Don't allow dropping a group onto itself or onto another group (no subgroups)
     if (draggedId === targetGroupId) return;
     
-    // Don't allow dropping a parent group onto its child
-    const draggedItemData = getItemById(draggedId);
-    if (draggedItemData && draggedItemData.type === 'group') {
-        const descendants = getAllDescendants(draggedId);
-        if (descendants.some(d => d.id === targetGroupId)) {
-            return;
-        }
+    // Don't allow dropping groups into groups (no subgroups allowed)
+    if (draggedItemData.type === 'group') {
+        // Groups can't be dropped onto other groups - they must stay at root level
+        // Only allow reordering at root level via the container, not via group headers
+        return;
+    }
+    
+    // For links, don't allow dropping if already in this group
+    if (draggedItemData.parentId === targetGroupId) {
+        return;
     }
     
     // Add visual indicator that this is a drop target
@@ -1142,10 +1156,10 @@ function handleGroupDrop(e) {
     
     if (!draggedItemData) return;
     
-    // Don't allow dropping groups into groups (no subgroups)
+    // Don't allow dropping groups onto group headers - groups must stay at root level
+    // Groups should only be reordered by dropping on the root container, not on other groups
     if (draggedItemData.type === 'group') {
-        showToast('Groups can only exist at root level', 'error');
-        return;
+        return; // Silently ignore - groups can't be dropped onto other groups
     }
     
     // Only links can be dropped into groups
