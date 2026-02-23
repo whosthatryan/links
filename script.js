@@ -337,28 +337,27 @@ function normalizeData() {
             hasChanges = true;
         }
         
-        // Ensure name/title are strings and never undefined
-        let name = item.name;
-        if (typeof name !== 'string') {
-            name = String(name || '');
-            hasChanges = true;
-        }
-        // Clean up corrupted values like "undefined", "null", "undefinednull", etc.
-        const isCorruptedName = (val) => !val || val === 'undefined' || val === 'null' || val === 'undefinednull' || val === 'nullundefined' || val === 'undefined null' || val === 'null undefined';
+        // Sanitize name and title using the centralized sanitizer
+        let name = sanitizeString(item.name, null);
+        let title = sanitizeString(item.title, null);
         
-        if (isCorruptedName(name)) {
-            name = (title && !isCorruptedName(title)) ? title : 'Untitled Group';
+        // If name is corrupted but title is good, use title
+        if (!name && title) {
+            name = title;
             hasChanges = true;
         }
-        
-        let title = item.title;
-        if (typeof title !== 'string') {
-            title = String(title || '');
+        // If title is corrupted but name is good, use name  
+        if (!title && name) {
+            title = name;
             hasChanges = true;
         }
-        // Clean up corrupted values
-        if (isCorruptedName(title)) {
-            title = (name && !isCorruptedName(name)) ? name : 'Untitled';
+        // If both are corrupted, set defaults
+        if (!name) {
+            name = 'Untitled Group';
+            hasChanges = true;
+        }
+        if (!title) {
+            title = 'Untitled';
             hasChanges = true;
         }
         
@@ -461,6 +460,16 @@ function isValidURL(string) {
     }
 }
 
+// Clean URL by removing tracking parameters
+function cleanURL(url) {
+    try {
+        const parsed = new URL(url);
+        return removeTrackingParams(parsed);
+    } catch (_) {
+        return url;
+    }
+}
+
 // HTML escape utility to prevent XSS
 function escapeHtml(text) {
     if (typeof text !== 'string') return '';
@@ -478,11 +487,140 @@ function escapeJsString(str) {
     return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
+// String sanitizer to prevent "undefinednull" and similar corruption
+function sanitizeString(value, defaultValue = '') {
+    // Handle null, undefined, or non-string types
+    if (value === null || value === undefined) {
+        return defaultValue;
+    }
+    
+    // Convert to string if not already
+    let str = String(value);
+    
+    // Check for corrupted values: "undefined", "null", "undefinednull", "nullundefined", etc.
+    const corruptedPatterns = ['undefined', 'null', 'undefinednull', 'nullundefined', 'undefined null', 'null undefined', 'undefined,null', 'null,undefined'];
+    const trimmed = str.trim().toLowerCase();
+    
+    if (corruptedPatterns.includes(trimmed) || trimmed === '' || trimmed === '""' || trimmed === "''") {
+        return defaultValue;
+    }
+    
+    // Check if string contains these as substrings (e.g., "undefinednull something")
+    const hasCorruption = /^(undefined|null|undefinednull|nullundefined)+/i.test(str) || 
+                          /(undefined|null){2,}/i.test(str);
+    if (hasCorruption) {
+        return defaultValue;
+    }
+    
+    return str;
+}
+
+// Sanitize URL to prevent javascript: and data: protocols
+function sanitizeURL(url) {
+    if (!url || typeof url !== 'string') {
+        return '';
+    }
+    
+    try {
+        const parsed = new URL(url);
+        const allowedProtocols = ['http:', 'https:'];
+        if (!allowedProtocols.includes(parsed.protocol)) {
+            return '';
+        }
+        // Remove tracking parameters
+        return removeTrackingParams(parsed);
+    } catch (e) {
+        // If invalid URL, check if it starts with allowed protocols
+        if (url.match(/^https?:\/\//i)) {
+            return url;
+        }
+        // Try adding https:// prefix
+        if (url.match(/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/)) {
+            return 'https://' + url;
+        }
+        return '';
+    }
+}
+
+// Remove common tracking parameters from URLs
+function removeTrackingParams(url) {
+    const trackingParams = [
+        // Google Analytics
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+        'utm_id', 'utm_source_platform', 'utm_creative_format', 'utm_marketing_tactic',
+        // Google Ads
+        'gclid', 'gclsrc', 'dclid',
+        // Facebook/Meta
+        'fbclid', 'fb_source', 'fb_ref',
+        // TikTok
+        'ttclid', 'tt_medium', 'tt_campaign',
+        // Twitter/X
+        'twclid', 'twitclid',
+        // Microsoft/Bing
+        'msclkid',
+        // Reddit
+        'rd_cid', 'reddit_campaign', 'reddit_source',
+        // LinkedIn
+        'li_fat_id', 'li_sugr',
+        // Pinterest
+        'epik', 'pp', 'utm_pinterest',
+        // Snapchat
+        'sc_cid', 'snapchat_source',
+        // YouTube
+        'si', 'feature', 'ab_channel',
+        // Generic
+        'ref', 'referral', 'referrer', 'source', 'medium', 'campaign',
+        'aff_id', 'affiliate', 'affiliate_id', 'aff_link',
+        'sub_id', 'subid', 'click_id', 'clickid',
+        'wbraid', 'gbraid', 'cid', 'ecid', 'ef_id',
+        'mkwid', 'pcrid', 'drip_id', 'mkt_tok',
+        // Email marketing
+        'mc_cid', 'mc_eid', 'ml_subscriber', 'ml_subscriber_hash',
+        // Other
+        'hsCtaTracking', '__hsfp', '__hssc', '__hstc', '_hsenc', '_hsmi',
+        'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src', 'hsa_ad', 'hsa_acc', 'hsa_net', 'hsa_kw',
+        'piwik_campaign', 'piwik_kwd', 'matomo_campaign', 'matomo_kwd',
+        'yclid', 'ysclid',
+        'cid', 'sid', 'mid', 'rid', 'pid'
+    ];
+    
+    const params = url.searchParams;
+    let removed = false;
+    
+    trackingParams.forEach(param => {
+        if (params.has(param)) {
+            params.delete(param);
+            removed = true;
+        }
+    });
+    
+    // Clean up hash fragments that contain tracking
+    if (url.hash) {
+        const hashParams = new URLSearchParams(url.hash.substring(1));
+        let hashChanged = false;
+        
+        trackingParams.forEach(param => {
+            if (hashParams.has(param)) {
+                hashParams.delete(param);
+                hashChanged = true;
+            }
+        });
+        
+        if (hashChanged) {
+            const newHash = hashParams.toString();
+            url.hash = newHash ? '#' + newHash : '';
+        }
+    }
+    
+    return url.toString();
+}
+
 function formatURL(url) {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        return 'https://' + url;
+        url = 'https://' + url;
     }
-    return url;
+    // Remove tracking parameters after formatting
+    return cleanURL(url);
 }
 
 function getDomainFromURL(url) {
@@ -586,11 +724,14 @@ function addLink() {
         title = getDomainFromURL(formattedURL);
     }
 
+    // Sanitize title to prevent corruption
+    title = sanitizeString(title, getDomainFromURL(formattedURL));
+
     // Add to array at root level (parentId: null)
     const newLink = {
         id: Date.now(),
         type: 'link',
-        url: formattedURL,
+        url: sanitizeURL(formattedURL),
         title: title,
         parentId: null,
         createdAt: new Date().toISOString()
@@ -651,12 +792,13 @@ function closeGroupModal() {
 }
 
 function saveGroup() {
-    const name = document.getElementById('groupNameInput').value.trim();
+    const rawName = document.getElementById('groupNameInput').value;
+    const name = sanitizeString(rawName, 'Untitled Group').trim() || 'Untitled Group';
     
     const newGroup = {
         id: Date.now(),
         type: 'group',
-        name: name || 'Untitled Group',
+        name: name,
         parentId: currentParentId,
         isExpanded: true,
         createdAt: new Date().toISOString()
@@ -795,7 +937,7 @@ function closeMoveModal() {
 function editTitle(id, newTitle) {
     const item = getItemById(id);
     if (item && item.type === 'link') {
-        item.title = newTitle.trim() || getDomainFromURL(item.url);
+        item.title = sanitizeString(newTitle, getDomainFromURL(item.url));
         saveItems();
         renderLinks();
     }
@@ -804,7 +946,7 @@ function editTitle(id, newTitle) {
 function editGroupName(id, newName) {
     const group = getItemById(id);
     if (group && group.type === 'group') {
-        group.name = newName.trim() || 'Untitled Group';
+        group.name = sanitizeString(newName, 'Untitled Group');
         saveItems();
         renderLinks();
     }
@@ -1193,12 +1335,8 @@ function renderLink(link, level, index, totalSiblings) {
     const isLong = link.url && link.url.length > 50;
     const displayUrl = isLong ? link.url.substring(0, 50) + '...' : (link.url || '');
     
-    // Ensure title is a valid string - handle all corruption cases
-    let title = link.title;
-    if (typeof title !== 'string') title = String(title || '');
-    if (title === 'undefined' || title === 'null' || title === 'undefinednull' || title === 'nullundefined' || !title.trim()) {
-        title = domain || 'Untitled';
-    }
+    // Sanitize title - handle all corruption cases
+    const title = sanitizeString(link.title, domain || 'Untitled');
     
     const safeTitle = escapeHtml(title);
     const safeUrl = escapeHtml(link.url || '');
