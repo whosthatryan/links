@@ -15,6 +15,310 @@ let deleteItemId = null;
 let currentParentId = null; // For creating subgroups
 let itemToMove = null; // For moving items between groups
 let toastTimeout = null; // Track toast timeout to prevent overlap
+let currentUser = null; // Firebase user
+let authMode = 'login'; // 'login' or 'register'
+let isOnline = navigator.onLine;
+
+// Firebase configuration - replace with your own Firebase project config
+// Get this from Firebase Console > Project Settings > General > Your apps > Web app
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "your-project.firebaseapp.com",
+    projectId: "your-project-id",
+    storageBucket: "your-project.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
+};
+
+// Initialize Firebase if config is provided
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDb = null;
+
+function initFirebase() {
+    // Check if Firebase config is set (not default placeholder)
+    if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+        console.warn('Firebase not configured. Please add your Firebase config to enable cloud sync.');
+        updateSyncStatus('local');
+        return false;
+    }
+    
+    try {
+        firebaseApp = firebase.initializeApp(firebaseConfig);
+        firebaseAuth = firebase.auth();
+        firebaseDb = firebase.firestore();
+        
+        // Auth state listener
+        firebaseAuth.onAuthStateChanged(handleAuthStateChange);
+        
+        return true;
+    } catch (e) {
+        console.error('Firebase initialization failed:', e);
+        updateSyncStatus('local');
+        return false;
+    }
+}
+
+function handleAuthStateChange(user) {
+    currentUser = user;
+    
+    // Get all instances of auth buttons (there may be duplicates in the DOM)
+    const authButtonsList = document.querySelectorAll('#authButtons');
+    const userInfoList = document.querySelectorAll('#userInfo');
+    const userEmailList = document.querySelectorAll('#userEmail');
+    
+    if (user) {
+        // User is signed in
+        authButtonsList.forEach(el => el.classList.add('hidden'));
+        userInfoList.forEach(el => el.classList.remove('hidden'));
+        userEmailList.forEach(el => el.textContent = user.email);
+        updateSyncStatus('syncing');
+        
+        // Load from cloud
+        loadFromCloud(user.uid);
+        
+        // Setup real-time sync
+        setupCloudSync(user.uid);
+    } else {
+        // User is signed out
+        authButtonsList.forEach(el => el.classList.remove('hidden'));
+        userInfoList.forEach(el => el.classList.add('hidden'));
+        userEmailList.forEach(el => el.textContent = '');
+        updateSyncStatus('local');
+        
+        // Load from localStorage
+        items = [];
+        try {
+            const stored = localStorage.getItem('quickLinks');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                items = Array.isArray(parsed) ? parsed : [];
+            }
+        } catch (e) {
+            items = [];
+        }
+        migrateOldData();
+        renderLinks();
+    }
+}
+
+function updateSyncStatus(status) {
+    const syncStatus = document.getElementById('syncStatus');
+    if (!syncStatus) return;
+    
+    if (status === 'local') {
+        syncStatus.textContent = 'Local only';
+        syncStatus.className = 'text-slate-500 text-xs';
+    } else if (status === 'syncing') {
+        syncStatus.textContent = 'Syncing...';
+        syncStatus.className = 'text-yellow-400 text-xs';
+    } else if (status === 'synced') {
+        syncStatus.textContent = 'Synced to cloud';
+        syncStatus.className = 'text-emerald-400 text-xs';
+    } else if (status === 'offline') {
+        syncStatus.textContent = 'Offline (local)';
+        syncStatus.className = 'text-orange-400 text-xs';
+    } else if (status === 'error') {
+        syncStatus.textContent = 'Sync error';
+        syncStatus.className = 'text-red-400 text-xs';
+    }
+}
+
+async function loadFromCloud(userId) {
+    if (!firebaseDb || !userId) return;
+    
+    try {
+        const doc = await firebaseDb.collection('users').doc(userId).get();
+        
+        if (doc.exists) {
+            const data = doc.data();
+            if (data.items && Array.isArray(data.items)) {
+                items = data.items;
+                normalizeData();
+                renderLinks();
+                updateSyncStatus('synced');
+            }
+        } else {
+            // No cloud data yet, save local data to cloud
+            await saveToCloud();
+            updateSyncStatus('synced');
+        }
+    } catch (e) {
+        console.error('Error loading from cloud:', e);
+        updateSyncStatus('error');
+    }
+}
+
+function setupCloudSync(userId) {
+    if (!firebaseDb || !userId) return;
+    
+    // Listen for online/offline status
+    window.addEventListener('online', () => {
+        isOnline = true;
+        updateSyncStatus('synced');
+    });
+    
+    window.addEventListener('offline', () => {
+        isOnline = false;
+        updateSyncStatus('offline');
+    });
+}
+
+async function saveToCloud() {
+    if (!firebaseDb || !currentUser || !isOnline) {
+        // Save to localStorage as fallback
+        localStorage.setItem('quickLinks', JSON.stringify(items));
+        return;
+    }
+    
+    try {
+        updateSyncStatus('syncing');
+        await firebaseDb.collection('users').doc(currentUser.uid).set({
+            items: items,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        updateSyncStatus('synced');
+    } catch (e) {
+        console.error('Error saving to cloud:', e);
+        // Save to localStorage as backup
+        localStorage.setItem('quickLinks', JSON.stringify(items));
+        updateSyncStatus('error');
+    }
+}
+
+// Auth functions
+function showAuthModal() {
+    const modal = document.getElementById('authModal');
+    const modalContent = document.getElementById('authModalContent');
+    
+    // Reset form
+    document.getElementById('authEmail').value = '';
+    document.getElementById('authPassword').value = '';
+    hideAuthError();
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        modalContent.classList.remove('scale-95');
+        modalContent.classList.add('scale-100');
+        document.getElementById('authEmail').focus();
+    }, 10);
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('authModal');
+    const modalContent = document.getElementById('authModalContent');
+    
+    modal.classList.add('opacity-0');
+    modalContent.classList.remove('scale-100');
+    modalContent.classList.add('scale-95');
+    
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }, 200);
+}
+
+function toggleAuthMode() {
+    authMode = authMode === 'login' ? 'register' : 'login';
+    
+    const title = document.getElementById('authModalTitle');
+    const actionBtn = document.getElementById('authActionBtn');
+    const toggleBtn = document.getElementById('authToggleBtn');
+    
+    if (authMode === 'login') {
+        title.textContent = 'Login';
+        actionBtn.textContent = 'Login';
+        toggleBtn.textContent = "Don't have an account? Register";
+    } else {
+        title.textContent = 'Register';
+        actionBtn.textContent = 'Register';
+        toggleBtn.textContent = 'Already have an account? Login';
+    }
+    
+    hideAuthError();
+}
+
+function showAuthError(message) {
+    const errorEl = document.getElementById('authError');
+    errorEl.textContent = message;
+    errorEl.classList.remove('hidden');
+}
+
+function hideAuthError() {
+    const errorEl = document.getElementById('authError');
+    errorEl.classList.add('hidden');
+}
+
+async function handleAuth() {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    
+    if (!email || !password) {
+        showAuthError('Please enter both email and password');
+        return;
+    }
+    
+    if (!firebaseAuth) {
+        showAuthError('Authentication not available. Please configure Firebase.');
+        return;
+    }
+    
+    const actionBtn = document.getElementById('authActionBtn');
+    const originalText = actionBtn.textContent;
+    actionBtn.textContent = authMode === 'login' ? 'Logging in...' : 'Registering...';
+    actionBtn.disabled = true;
+    
+    try {
+        if (authMode === 'login') {
+            await firebaseAuth.signInWithEmailAndPassword(email, password);
+        } else {
+            const userCredential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+            // For new users, migrate their local data to cloud
+            if (items.length > 0) {
+                await saveToCloud();
+            }
+        }
+        closeAuthModal();
+    } catch (e) {
+        console.error('Auth error:', e);
+        showAuthError(e.message || 'Authentication failed');
+    } finally {
+        actionBtn.textContent = originalText;
+        actionBtn.disabled = false;
+    }
+}
+
+async function logout() {
+    if (!firebaseAuth) return;
+    
+    try {
+        await firebaseAuth.signOut();
+        // Clear items to force reload from localStorage
+        items = [];
+        renderLinks();
+    } catch (e) {
+        console.error('Logout error:', e);
+        showToast('Failed to logout', 'error');
+    }
+}
+
+// Network status monitoring
+window.addEventListener('online', () => {
+    isOnline = true;
+    if (currentUser) {
+        updateSyncStatus('synced');
+        // Sync any pending changes
+        saveToCloud();
+    }
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    updateSyncStatus('offline');
+});
 
 // Normalize data to fix common corruption issues
 function normalizeData() {
@@ -117,6 +421,9 @@ function migrateOldData() {
 
 // Initialize - Single entry point
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Firebase first
+    initFirebase();
+    
     migrateOldData();
     renderLinks();
     document.getElementById('linkInput').addEventListener('keypress', (e) => {
@@ -130,6 +437,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('groupNameInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') saveGroup();
+    });
+    document.getElementById('authEmail').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') document.getElementById('authPassword').focus();
+    });
+    document.getElementById('authPassword').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleAuth();
     });
 });
 
@@ -1195,7 +1508,13 @@ function handleGroupDrop(e) {
 }
 
 function saveItems() {
+    // Always save to localStorage as backup
     localStorage.setItem('quickLinks', JSON.stringify(items));
+    
+    // Also save to cloud if user is logged in
+    if (currentUser && firebaseDb) {
+        saveToCloud();
+    }
 }
 
 function showToast(message = 'Copied to clipboard!', type = 'success') {
@@ -1277,4 +1596,7 @@ document.getElementById('groupModal').addEventListener('click', (e) => {
 });
 document.getElementById('moveModal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeMoveModal();
+});
+document.getElementById('authModal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeAuthModal();
 });
