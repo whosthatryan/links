@@ -147,7 +147,7 @@
                 <i data-lucide="link-2" class="w-8 h-8 text-white/80"></i>
             </div>
             <h1 class="text-4xl font-light text-gray-600 mb-4 tracking-[0.3em] uppercase glow-text">L/nks</h1>
-            <p class="text-gray-400 text-sm font-light tracking-widest">store and copy frequently used l/nks instantly</p>
+            <p class="text-gray-400 text-sm font-light tracking-widest">Store and copy frequently used l/nks /nstantly</p>
         </div>
 
         <!-- Monochrome Input Section -->
@@ -173,7 +173,7 @@
                         <input 
                             type="text" 
                             id="titleInput" 
-                            placeholder="name th/s l/nk" 
+                            placeholder="Name this l/nk" 
                             class="w-full pl-11 pr-4 py-3.5 bg-[#0a0a0a]/60 rounded-sm focus:bg-[#111111]/80 outline-none transition-all duration-500 text-white placeholder-gray-300 text-sm tracking-wide border border-white/10 focus:border-white/20"
                             autocomplete="off"
                         >
@@ -193,24 +193,23 @@
                         class="btn px-8 py-3 rounded-sm tracking-widest text-xs uppercase transition-all duration-500 flex items-center justify-center gap-3 hover:bg-[#404040]/50"
                     >
                         <i data-lucide="folder-plus" class="w-4 h-4 text-gray-300 opacity-70"></i>
-                        <span>new group</span>
+                        <span>Group</span>
                     </button>
                 </div>
             </div>
             
             <p id="errorMsg" class="text-gray-300 text-sm mt-6 hidden flex items-center gap-3 font-light tracking-wide animate-fade-in">
                 <i data-lucide="alert-circle" class="w-4 h-4"></i>
-                <span>Please enter a valid address</span>
+                <span>Please enter a val/d address</span>
             </p>
         </div>
 
         <!-- Monochrome Stats Bar -->
         <div class="flex justify-between items-center mb-10 px-4">
             <span class="text-gray-500 text-xs font-light tracking-widest uppercase">
-                <span id="linkCount" class="text-gray-500">0</span> l/nks
+                <span id="linkCount" class="text-gray-500">0</span> links
                 <span class="mx-3 text-gray-600">_</span>
                 <span id="groupCount" class="text-gray-500">0</span> groups
-
 
             </span>
             <div class="flex items-center gap-4">
@@ -221,7 +220,7 @@
                         class="text-xs text-gray-400 hover:text-white transition-all duration-500 flex items-center gap-2 font-light tracking-widest uppercase"
                     >
                         <i data-lucide="log-in" class="w-3 h-3"></i>
-                        Log/n
+                        log/n
                     </button>
                 </div>
                 <div id="userInfo" class="hidden flex items-center gap-4">
@@ -277,11 +276,11 @@
                     <i data-lucide="trash-2" class="w-5 h-5 text-white/70"></i>
                 </div>
                 <div>
-                    <h3 class="text-lg font-light text-white tracking-wide">Remove <span id="deleteItemType">moment</span></h3>
+                    <h3 class="text-lg font-light text-white tracking-wide">Remove <span id="deleteItemType">l/nk</span></h3>
                     <p class="text-gray-500 text-xs mt-1 tracking-widest uppercase">Cannot be undone</p>
                 </div>
             </div>
-            <p id="deleteModalText" class="text-gray-300 text-sm mb-10 leading-relaxed font-light">Permanently erase this from your collection?</p>
+            <p id="deleteModalText" class="text-gray-300 text-sm mb-10 leading-relaxed font-light">Permanently erase th/s from your collect/on?</p>
             <div class="flex gap-4">
                 <button onclick="closeDeleteModal()" class="flex-1 px-6 py-4 border border-white/10 text-gray-400 rounded-sm hover:bg-white/5 transition-all duration-500 font-light text-xs tracking-widest uppercase">
                     Keep
@@ -300,7 +299,7 @@
                 <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/40 to-[#262626]/40 rounded-sm flex items-center justify-center border border-white/10">
                     <i data-lucide="folder" class="w-5 h-5 text-white/60"></i>
                 </div>
-                <h3 class="text-lg font-light text-white tracking-wide" id="groupModalTitle">New Collection</h3>
+                <h3 class="text-lg font-light text-white tracking-wide" id="groupModalTitle">New Group</h3>
             </div>
             <div class="mb-8">
                 <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Name</label>
@@ -310,7 +309,7 @@
                     placeholder="Untitled..." 
                     class="w-full px-5 py-4 bg-[#0a0a0a]/50 border border-white/10 rounded-sm focus:bg-[#0a0a0a]/70 focus:border-white/20 outline-none text-white placeholder-gray-500 text-sm tracking-wide transition-all duration-500"
                 >
-                <p id="groupModalSubtitle" class="text-gray-500 text-xs mt-4 hidden font-light tracking-wide">Within a collection</p>
+                <p id="groupModalSubtitle" class="text-gray-500 text-xs mt-4 hidden font-light tracking-wide">Within a group</p>
             </div>
             <div class="flex gap-4">
                 <button onclick="closeGroupModal()" class="flex-1 px-6 py-4 border border-white/10 text-gray-400 rounded-sm hover:bg-white/5 transition-all duration-500 font-light text-xs tracking-widest uppercase">
@@ -330,7 +329,7 @@
                 <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/50 to-[#262626]/40 rounded-sm flex items-center justify-center border border-white/10">
                     <i data-lucide="folder-input" class="w-5 h-5 text-white/70"></i>
                 </div>
-                <h3 class="text-lg font-light text-white tracking-wide">Move to...</h3>
+                <h3 class="text-lg font-light text-white tracking-wide">Move to</h3>
             </div>
             <div class="mb-8 max-h-60 overflow-y-auto space-y-2" id="moveGroupList">
                 <!-- Groups will be listed here -->
@@ -350,12 +349,12 @@
                 <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/60 to-[#262626]/60 rounded-sm flex items-center justify-center border border-white/10">
                     <i data-lucide="user" class="w-5 h-5 text-white/70"></i>
                 </div>
-                <h3 class="text-lg font-light text-white tracking-wide" id="authModalTitle">Enter</h3>
+                <h3 class="text-lg font-light text-white tracking-wide" id="authModalTitle">log/n</h3>
             </div>
             
             <div class="space-y-5 mb-10">
                 <div>
-                    <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Email</label>
+                    <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Ema/l</label>
                     <input 
                         type="email" 
                         id="authEmail" 
@@ -364,7 +363,7 @@
                     >
                 </div>
                 <div>
-                    <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Passphrase</label>
+                    <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Password</label>
                     <input 
                         type="password" 
                         id="authPassword" 
@@ -380,7 +379,7 @@
                     Return
                 </button>
                 <button onclick="handleAuth()" id="authActionBtn" class="flex-1 px-6 py-4 bg-[#404040]/40 text-white rounded-sm hover:bg-[#525252]/50 transition-all duration-500 font-light text-xs tracking-widest uppercase border border-white/10">
-                    Continue
+                    Cont/nue
                 </button>
             </div>
             
