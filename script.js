@@ -237,13 +237,13 @@ function toggleAuthMode() {
     const toggleBtn = document.getElementById('authToggleBtn');
     
     if (authMode === 'login') {
-        title.textContent = 'Login';
-        actionBtn.textContent = 'Login';
-        toggleBtn.textContent = "Don't have an account? Register";
+        title.textContent = 'log/n';
+        actionBtn.textContent = 'log/n';
+        toggleBtn.textContent = "don't have an account? reg/ster";
     } else {
-        title.textContent = 'Register';
-        actionBtn.textContent = 'Register';
-        toggleBtn.textContent = 'Already have an account? Login';
+        title.textContent = 'reg/ster';
+        actionBtn.textContent = 'reg/ster';
+        toggleBtn.textContent = 'already have an account? log/n';
     }
     
     hideAuthError();
@@ -1116,7 +1116,6 @@ let dragOverPosition = null;
 
 function renderLinks() {
     const container = document.getElementById('linksContainer');
-    let emptyState = document.getElementById('emptyState');
     const linkCount = document.getElementById('linkCount');
     const groupCount = document.getElementById('groupCount');
     const clearBtn = document.getElementById('clearAllBtn');
@@ -1143,22 +1142,20 @@ function renderLinks() {
     groupCount.textContent = groups.length;
     
     if (items.length === 0) {
+        // Always clear and recreate empty state fresh to prevent any corruption or styling issues
         container.innerHTML = '';
-        // If emptyState was destroyed by previous innerHTML, recreate it with monochrome styling
-        if (!emptyState) {
-            emptyState = document.createElement('div');
-            emptyState.id = 'emptyState';
-            emptyState.className = 'text-center py-24 bg-[#0a0a0a]/40 rounded-sm border border-dashed border-white/10 hover:border-white/20 transition-all duration-700';
-            emptyState.innerHTML = `
-                <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-[#262626]/50 to-[#171717]/50 rounded-sm mb-8 border border-white/5">
-                    <i data-lucide="link" class="w-6 h-6 text-gray-500 opacity-50"></i>
-                </div>
-                <p class="text-gray-300 font-light text-sm tracking-widest uppercase">The canvas awaits</p>
-                <p class="text-gray-500 text-xs mt-3 font-light tracking-wide">Add your first moment</p>
-            `;
-        }
+        
+        const emptyState = document.createElement('div');
+        emptyState.id = 'emptyState';
+        emptyState.className = 'text-center py-24 bg-[#0a0a0a]/40 rounded-sm border border-dashed border-white/10 hover:border-white/20 transition-all duration-700';
+        emptyState.innerHTML = `
+            <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-[#262626]/50 to-[#171717]/50 rounded-sm mb-8 border border-white/5">
+                <i data-lucide="link" class="w-6 h-6 text-gray-500 opacity-50"></i>
+            </div>
+            <p class="text-gray-300 font-light text-sm tracking-widest uppercase">empty</p>
+        `;
+        
         container.appendChild(emptyState);
-        emptyState.classList.remove('hidden');
         clearBtn.classList.add('hidden');
         newGroupBtn.classList.add('hidden');
         lucide.createIcons();
@@ -1167,9 +1164,6 @@ function renderLinks() {
     
     clearBtn.classList.remove('hidden');
     newGroupBtn.classList.remove('hidden');
-    if (emptyState) {
-        emptyState.classList.add('hidden');
-    }
     
     // Render hierarchical structure
     const rootItems = items.filter(item => item.parentId === null || item.parentId === undefined);
