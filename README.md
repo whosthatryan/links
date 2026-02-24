@@ -1,7 +1,7 @@
 ---
-title: DeepSite Project
-colorFrom: blue
-colorTo: purple
+title: L/NKS
+colorFrom: grays, whites
+colorTo: grays, whites
 sdk: static
 emoji: 📱
 tags:
