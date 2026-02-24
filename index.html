@@ -58,22 +58,22 @@
             50% { transform: scale(1.1); }
         }
         
-        /* Custom scrollbar */
+        /* Custom scrollbar - monochrome */
         ::-webkit-scrollbar {
             width: 8px;
         }
         
         ::-webkit-scrollbar-track {
-            background: #1e293b;
+            background: #171717;
         }
         
         ::-webkit-scrollbar-thumb {
-            background: #475569;
+            background: #404040;
             border-radius: 4px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
+            background: #525252;
         }
         
         /* Drag and Drop Styles */
@@ -130,306 +130,275 @@
         .indent-level-5 { margin-left: 7.5rem; }
     </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 to-slate-800 min-h-screen text-slate-200">
+<body class="bg-neutral-50 min-h-screen text-neutral-900 relative overflow-x-hidden">
+
+    <!-- Rothko Color Field Background -->
+    <div class="rothko-field-1"></div>
+    <div class="rothko-field-2"></div>
+    <div class="atmosphere"></div>
+    <div class="vignette"></div>
 
     <!-- Main Container -->
-    <div class="max-w-3xl mx-auto px-4 py-12">
+    <div class="max-w-2xl mx-auto px-6 py-20 relative z-10">
         
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-10">
-            <div class="flex-1 text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-indigo-500 rounded-2xl shadow-lg mb-4 shadow-indigo-500/20">
-                    <i data-lucide="link-2" class="w-8 h-8 text-white"></i>
-                </div>
-                <h1 class="text-4xl font-bold text-white mb-2 tracking-tight">LINKS</h1>
-                <p class="text-slate-400">Store and copy your frequently used links instantly</p>
+        <!-- Monochrome Header -->
+        <div class="text-center mb-20 relative">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#262626] to-[#171717] rounded-sm mb-8 shadow-2xl border border-white/10">
+                <i data-lucide="link-2" class="w-8 h-8 text-white/80"></i>
             </div>
-            
-            <!-- Auth Buttons - Upper Right -->
-            <div class="absolute top-6 right-6 flex items-center gap-3">
-                <div id="authButtons" class="flex items-center gap-2">
-                    <button 
-                        onclick="showAuthModal()" 
-                        id="loginBtn"
-                        class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm font-medium transition-all border border-slate-600 hover:border-indigo-500/50 flex items-center gap-2"
-                    >
-                        <i data-lucide="log-in" class="w-4 h-4"></i>
-                        Login
-                    </button>
-                    <button 
-                        onclick="showAuthModal(); toggleAuthMode();" 
-                        id="registerBtn"
-                        class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
-                    >
-                        <i data-lucide="user-plus" class="w-4 h-4"></i>
-                        Register
-                    </button>
-                </div>
-                <div id="userInfo" class="hidden flex items-center gap-3 bg-slate-800/80 rounded-lg px-3 py-2 border border-slate-700">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center">
-                            <i data-lucide="user" class="w-4 h-4 text-indigo-400"></i>
-                        </div>
-                        <span id="userEmail" class="text-sm text-slate-300 max-w-[150px] truncate"></span>
-                    </div>
-                    <button 
-                        onclick="logout()" 
-                        class="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
-                        title="Logout"
-                    >
-                        <i data-lucide="log-out" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
+            <h1 class="text-4xl font-light text-gray-600 mb-4 tracking-[0.3em] uppercase glow-text">L/nks</h1>
+            <p class="text-gray-400 text-sm font-light tracking-widest">store and copy frequently used l/nks instantly</p>
         </div>
 
-        <!-- Input Section -->
-        <div class="bg-slate-800/80 backdrop-blur rounded-2xl shadow-lg p-6 mb-8 border border-slate-700">
-            <div class="flex flex-col sm:flex-row gap-3">
-                <div class="flex-1 space-y-2">
+        <!-- Monochrome Input Section -->
+        <div class="card mb-12 animate-emerge">
+            <div class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-1 space-y-4">
                     <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-lucide="globe" class="w-5 h-5 text-slate-400"></i>
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none opacity-50">
+                            <i data-lucide="globe" class="w-4 h-4 text-gray-300"></i>
                         </div>
                         <input 
                             type="text" 
                             id="linkInput" 
-                            placeholder="Paste or type a link (e.g., https://example.com)" 
-                            class="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-200 placeholder-slate-500"
+                            placeholder="enter a web address" 
+                            class="w-full pl-11 pr-4 py-4 bg-[#0a0a0a]/80 rounded-sm focus:bg-[#111111]/90 outline-none transition-all duration-500 text-white placeholder-gray-300 text-sm tracking-wide border border-white/10 focus:border-white/20"
                             autocomplete="off"
                         >
                     </div>
                     <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i data-lucide="type" class="w-5 h-5 text-slate-400"></i>
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none opacity-50">
+                            <i data-lucide="type" class="w-4 h-4 text-gray-300"></i>
                         </div>
                         <input 
                             type="text" 
                             id="titleInput" 
-                            placeholder="Title (optional - defaults to website name)" 
-                            class="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-200 placeholder-slate-500 text-sm"
+                            placeholder="name th/s l/nk" 
+                            class="w-full pl-11 pr-4 py-3.5 bg-[#0a0a0a]/60 rounded-sm focus:bg-[#111111]/80 outline-none transition-all duration-500 text-white placeholder-gray-300 text-sm tracking-wide border border-white/10 focus:border-white/20"
                             autocomplete="off"
                         >
                     </div>
                 </div>
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-3">
                     <button 
                         onclick="addLink()" 
                         id="addBtn"
-                        class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:shadow-indigo-500/25 active:scale-95"
+                        class="btn btn-primary px-8 py-4 rounded-sm tracking-widest text-xs uppercase transition-all duration-500 flex items-center justify-center gap-3"
                     >
-                        <i data-lucide="plus" class="w-5 h-5"></i>
-                        <span>Add Link</span>
+                        <i data-lucide="plus" class="w-4 h-4 opacity-80"></i>
+                        <span>Add</span>
                     </button>
                     <button 
                         onclick="createNewGroup()" 
-                        class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-6 py-2 rounded-xl font-medium transition-all duration-200 flex items-center justify-center gap-2 text-sm border border-slate-600 hover:border-slate-500"
+                        class="btn px-8 py-3 rounded-sm tracking-widest text-xs uppercase transition-all duration-500 flex items-center justify-center gap-3 hover:bg-[#404040]/50"
                     >
-                        <i data-lucide="folder-plus" class="w-4 h-4"></i>
-                        <span>New Group</span>
+                        <i data-lucide="folder-plus" class="w-4 h-4 text-gray-300 opacity-70"></i>
+                        <span>new group</span>
                     </button>
                 </div>
             </div>
             
-            <p id="errorMsg" class="text-red-400 text-sm mt-2 hidden flex items-center gap-1">
+            <p id="errorMsg" class="text-gray-300 text-sm mt-6 hidden flex items-center gap-3 font-light tracking-wide animate-fade-in">
                 <i data-lucide="alert-circle" class="w-4 h-4"></i>
-                <span>Please enter a valid URL</span>
+                <span>Please enter a valid address</span>
             </p>
         </div>
 
-        <!-- Stats Bar -->
-        <div class="flex justify-between items-center mb-4 px-2">
-            <span class="text-slate-400 font-medium flex items-center gap-2">
-                <span id="linkCount" class="text-indigo-400 font-bold">0</span> links
-                <span class="text-slate-600">|</span>
-                <span id="groupCount" class="text-indigo-400 font-bold">0</span> groups
-                <span class="text-slate-600">|</span>
-                <span id="syncStatus" class="text-slate-500 text-xs bg-slate-800 px-2 py-1 rounded">Local only</span>
+        <!-- Monochrome Stats Bar -->
+        <div class="flex justify-between items-center mb-10 px-4">
+            <span class="text-gray-500 text-xs font-light tracking-widest uppercase">
+                <span id="linkCount" class="text-gray-500">0</span> l/nks
+                <span class="mx-3 text-gray-600">_</span>
+                <span id="groupCount" class="text-gray-500">0</span> groups
+
+
             </span>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-4">
+                <div id="authButtons" class="flex items-center gap-3">
+                    <button 
+                        onclick="showAuthModal()" 
+                        id="loginBtn"
+                        class="text-xs text-gray-400 hover:text-white transition-all duration-500 flex items-center gap-2 font-light tracking-widest uppercase"
+                    >
+                        <i data-lucide="log-in" class="w-3 h-3"></i>
+                        Log/n
+                    </button>
+                </div>
+                <div id="userInfo" class="hidden flex items-center gap-4">
+                    <span id="userEmail" class="text-xs text-gray-300 font-light tracking-wide"></span>
+                    <button 
+                        onclick="logout()" 
+                        class="p-2 rounded-sm text-gray-400 hover:text-white transition-all duration-500"
+                    >
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
                 <button 
                     onclick="createNewGroup()" 
                     id="newGroupBtn"
-                    class="text-sm text-slate-400 hover:text-indigo-400 transition-colors hidden flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-slate-800"
+                    class="p-2 rounded-sm text-gray-400 hover:text-white transition-all duration-500 hidden"
                 >
                     <i data-lucide="folder-plus" class="w-4 h-4"></i>
-                    New Group
                 </button>
                 <button 
                     onclick="clearAll()" 
                     id="clearAllBtn"
-                    class="text-sm text-slate-500 hover:text-red-400 transition-colors hidden flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-slate-800"
+                    class="p-2 rounded-sm text-gray-400 hover:text-red-400 transition-all duration-500 hidden"
                 >
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    Clear all
                 </button>
             </div>
         </div>
 
-        <!-- Links List -->
-        <div id="linksContainer" class="space-y-1 min-h-[200px]">
+        <!-- Monochrome Links List -->
+        <div id="linksContainer" class="space-y-4 min-h-[200px] animate-emerge" style="animation-delay: 0.2s;">
             <!-- Empty State -->
-            <div id="emptyState" class="text-center py-16 bg-slate-800/50 backdrop-blur rounded-2xl border-2 border-dashed border-slate-700">
-                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-700 rounded-full mb-3">
-                    <i data-lucide="link" class="w-6 h-6 text-slate-500"></i>
+            <div id="emptyState" class="text-center py-24 bg-[#0a0a0a]/40 rounded-sm border border-dashed border-white/10 hover:border-white/20 transition-all duration-700">
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-[#262626]/50 to-[#171717]/50 rounded-sm mb-8 border border-white/5">
+                    <i data-lucide="link" class="w-6 h-6 text-gray-500 opacity-100"></i>
                 </div>
-                <p class="text-slate-400 font-medium">No links added yet</p>
-                <p class="text-slate-500 text-sm mt-1">Add your first link above to get started</p>
+                <p class="text-gray-300 font-light text-sm tracking-widest uppercase">empty</p>
             </div>
         </div>
 
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-6 right-6 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
-        <i data-lucide="check-circle" class="w-5 h-5"></i>
-        <span class="font-medium">Copied to clipboard!</span>
+    <!-- Monochrome Toast -->
+    <div id="toast" class="fixed bottom-12 right-12 glass-dark text-white px-8 py-5 rounded-sm shadow-2xl transform translate-y-24 opacity-0 transition-all duration-700 flex items-center gap-4 z-50 text-xs tracking-widest uppercase backdrop-blur-xl">
+        <i data-lucide="check-circle" class="w-4 h-4 text-white opacity-80"></i>
+        <span>Saved</span>
     </div>
 
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="deleteModalContent">
-            <div class="flex items-center gap-3 mb-4 text-red-400">
-                <div class="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center">
-                    <i data-lucide="trash-2" class="w-5 h-5"></i>
+    <!-- Monochrome Delete Modal -->
+    <div id="deleteModal" class="fixed inset-0 bg-black/80 backdrop-blur-xl hidden items-center justify-center z-50 opacity-0 transition-opacity duration-500">
+        <div class="glass rounded-sm p-10 max-w-sm mx-4 transform scale-95 transition-transform duration-500" id="deleteModalContent">
+            <div class="flex items-center gap-5 mb-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/60 to-[#262626]/60 rounded-sm flex items-center justify-center border border-white/10">
+                    <i data-lucide="trash-2" class="w-5 h-5 text-white/70"></i>
                 </div>
-                <h3 class="text-lg font-bold text-white">Delete <span id="deleteItemType">Link</span>?</h3>
+                <div>
+                    <h3 class="text-lg font-light text-white tracking-wide">Remove <span id="deleteItemType">moment</span></h3>
+                    <p class="text-gray-500 text-xs mt-1 tracking-widest uppercase">Cannot be undone</p>
+                </div>
             </div>
-            <p id="deleteModalText" class="text-slate-400 mb-6">Are you sure you want to remove this item? This action cannot be undone.</p>
-            <div class="flex gap-3">
-                <button onclick="closeDeleteModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
-                    Cancel
+            <p id="deleteModalText" class="text-gray-300 text-sm mb-10 leading-relaxed font-light">Permanently erase this from your collection?</p>
+            <div class="flex gap-4">
+                <button onclick="closeDeleteModal()" class="flex-1 px-6 py-4 border border-white/10 text-gray-400 rounded-sm hover:bg-white/5 transition-all duration-500 font-light text-xs tracking-widest uppercase">
+                    Keep
                 </button>
-                <button onclick="confirmDelete()" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">
-                    Delete
+                <button onclick="confirmDelete()" class="flex-1 px-6 py-4 bg-[#404040]/60 text-white rounded-sm hover:bg-[#525252]/70 transition-all duration-500 font-light text-xs tracking-widest uppercase border border-white/10">
+                    Remove
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Group Modal -->
-    <div id="groupModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="groupModalContent">
-            <div class="flex items-center gap-3 mb-4 text-indigo-400">
-                <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
-                    <i data-lucide="folder" class="w-5 h-5"></i>
+    <!-- Monochrome Group Modal -->
+    <div id="groupModal" class="fixed inset-0 bg-black/80 backdrop-blur-xl hidden items-center justify-center z-50 opacity-0 transition-opacity duration-500">
+        <div class="glass rounded-sm p-10 max-w-sm mx-4 transform scale-95 transition-transform duration-500" id="groupModalContent">
+            <div class="flex items-center gap-5 mb-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/40 to-[#262626]/40 rounded-sm flex items-center justify-center border border-white/10">
+                    <i data-lucide="folder" class="w-5 h-5 text-white/60"></i>
                 </div>
-                <h3 class="text-lg font-bold text-white" id="groupModalTitle">New Group</h3>
+                <h3 class="text-lg font-light text-white tracking-wide" id="groupModalTitle">New Collection</h3>
             </div>
-            <div class="mb-6">
-                <label class="block text-slate-400 text-sm mb-2">Group Name</label>
+            <div class="mb-8">
+                <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Name</label>
                 <input 
                     type="text" 
                     id="groupNameInput" 
-                    placeholder="Enter group name..." 
-                    class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-white placeholder-slate-500"
+                    placeholder="Untitled..." 
+                    class="w-full px-5 py-4 bg-[#0a0a0a]/50 border border-white/10 rounded-sm focus:bg-[#0a0a0a]/70 focus:border-white/20 outline-none text-white placeholder-gray-500 text-sm tracking-wide transition-all duration-500"
                 >
-                <p id="groupModalSubtitle" class="text-slate-500 text-sm mt-2 hidden">This will be created as a subgroup</p>
+                <p id="groupModalSubtitle" class="text-gray-500 text-xs mt-4 hidden font-light tracking-wide">Within a collection</p>
             </div>
-            <div class="flex gap-3">
-                <button onclick="closeGroupModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
+            <div class="flex gap-4">
+                <button onclick="closeGroupModal()" class="flex-1 px-6 py-4 border border-white/10 text-gray-400 rounded-sm hover:bg-white/5 transition-all duration-500 font-light text-xs tracking-widest uppercase">
                     Cancel
                 </button>
-                <button onclick="saveGroup()" class="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-colors font-medium">
-                    Save
+                <button onclick="saveGroup()" class="flex-1 px-6 py-4 bg-[#404040]/40 text-white rounded-sm hover:bg-[#525252]/50 transition-all duration-500 font-light text-xs tracking-widest uppercase border border-white/10">
+                    Create
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Move to Group Modal -->
-    <div id="moveModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="moveModalContent">
-            <div class="flex items-center gap-3 mb-4 text-indigo-400">
-                <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
-                    <i data-lucide="folder-input" class="w-5 h-5"></i>
+    <!-- Monochrome Move Modal -->
+    <div id="moveModal" class="fixed inset-0 bg-black/80 backdrop-blur-xl hidden items-center justify-center z-50 opacity-0 transition-opacity duration-500">
+        <div class="glass rounded-sm p-10 max-w-sm mx-4 transform scale-95 transition-transform duration-500" id="moveModalContent">
+            <div class="flex items-center gap-5 mb-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/50 to-[#262626]/40 rounded-sm flex items-center justify-center border border-white/10">
+                    <i data-lucide="folder-input" class="w-5 h-5 text-white/70"></i>
                 </div>
-                <h3 class="text-lg font-bold text-white">Move to Group</h3>
+                <h3 class="text-lg font-light text-white tracking-wide">Move to...</h3>
             </div>
-            <div class="mb-6 max-h-60 overflow-y-auto" id="moveGroupList">
+            <div class="mb-8 max-h-60 overflow-y-auto space-y-2" id="moveGroupList">
                 <!-- Groups will be listed here -->
             </div>
-            <div class="flex gap-3">
-                <button onclick="closeMoveModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
-                    Cancel
+            <div class="flex gap-4">
+                <button onclick="closeMoveModal()" class="flex-1 px-6 py-4 border border-white/10 text-gray-400 rounded-sm hover:bg-white/5 transition-all duration-500 font-light text-xs tracking-widest uppercase">
+                    Return
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Auth Modal -->
-    <div id="authModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-200">
-        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm mx-4 transform scale-95 transition-transform duration-200 border border-slate-700" id="authModalContent">
-            <div class="flex items-center gap-3 mb-4 text-indigo-400">
-                <div class="w-10 h-10 bg-indigo-500/10 rounded-full flex items-center justify-center">
-                    <i data-lucide="user" class="w-5 h-5"></i>
+    <!-- Monochrome Auth Modal -->
+    <div id="authModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl hidden items-center justify-center z-50 opacity-0 transition-opacity duration-500">
+        <div class="glass rounded-sm p-10 max-w-sm mx-4 transform scale-95 transition-transform duration-500" id="authModalContent">
+            <div class="flex items-center gap-5 mb-8">
+                <div class="w-14 h-14 bg-gradient-to-br from-[#404040]/60 to-[#262626]/60 rounded-sm flex items-center justify-center border border-white/10">
+                    <i data-lucide="user" class="w-5 h-5 text-white/70"></i>
                 </div>
-                <h3 class="text-lg font-bold text-white" id="authModalTitle">Login</h3>
+                <h3 class="text-lg font-light text-white tracking-wide" id="authModalTitle">Enter</h3>
             </div>
             
-            <div class="space-y-3 mb-6">
+            <div class="space-y-5 mb-10">
                 <div>
-                    <label class="block text-slate-400 text-sm mb-1">Email</label>
+                    <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Email</label>
                     <input 
                         type="email" 
                         id="authEmail" 
-                        placeholder="Enter your email..." 
-                        class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-white placeholder-slate-500"
+                        placeholder="..." 
+                        class="w-full px-5 py-4 bg-[#0a0a0a]/50 border border-white/10 rounded-sm focus:bg-[#0a0a0a]/70 focus:border-white/20 outline-none text-white placeholder-gray-500 text-sm tracking-wide transition-all duration-500"
                     >
                 </div>
                 <div>
-                    <label class="block text-slate-400 text-sm mb-1">Password</label>
+                    <label class="block text-gray-500 text-xs mb-3 font-light tracking-widest uppercase">Passphrase</label>
                     <input 
                         type="password" 
                         id="authPassword" 
-                        placeholder="Enter your password..." 
-                        class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-white placeholder-slate-500"
+                        placeholder="••••••" 
+                        class="w-full px-5 py-4 bg-[#0a0a0a]/50 border border-white/10 rounded-sm focus:bg-[#0a0a0a]/70 focus:border-white/20 outline-none text-white placeholder-gray-500 text-sm tracking-wide transition-all duration-500"
                     >
                 </div>
-                <p id="authError" class="text-red-400 text-sm hidden"></p>
+                <p id="authError" class="text-gray-300 text-xs hidden tracking-wide font-light"></p>
             </div>
             
-            <div class="flex gap-3">
-                <button onclick="closeAuthModal()" class="flex-1 px-4 py-2 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors font-medium">
-                    Cancel
+            <div class="flex gap-4">
+                <button onclick="closeAuthModal()" class="flex-1 px-6 py-4 border border-white/10 text-gray-400 rounded-sm hover:bg-white/5 transition-all duration-500 font-light text-xs tracking-widest uppercase">
+                    Return
                 </button>
-                <button onclick="handleAuth()" id="authActionBtn" class="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition-colors font-medium">
-                    Login
+                <button onclick="handleAuth()" id="authActionBtn" class="flex-1 px-6 py-4 bg-[#404040]/40 text-white rounded-sm hover:bg-[#525252]/50 transition-all duration-500 font-light text-xs tracking-widest uppercase border border-white/10">
+                    Continue
                 </button>
             </div>
             
-            <div class="mt-4 text-center">
-                <button onclick="toggleAuthMode()" id="authToggleBtn" class="text-sm text-slate-400 hover:text-indigo-400 transition-colors">
-                    Don't have an account? Register
+            <div class="mt-8 text-center">
+                <button onclick="toggleAuthMode()" id="authToggleBtn" class="text-xs text-gray-500 hover:text-white transition-colors font-light tracking-widest uppercase">
+                    New presence
                 </button>
             </div>
         </div>
     </div>
 
-   <script type="module">
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-analytics.js";
-        // TODO: Add SDKs for Firebase products that you want to use
-        // https://firebase.google.com/docs/web/setup#available-libraries
-
-        // Your web app's Firebase configuration
-        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-        const firebaseConfig = {
-            apiKey: "AIzaSyBkgua27JXdyJQaOxflB4QuVbjX1zRDuag",
-            authDomain: "links-25539.firebaseapp.com",
-            projectId: "links-25539",
-            storageBucket: "links-25539.firebasestorage.app",
-            messagingSenderId: "263012790691",
-            appId: "1:263012790691:web:752314c03c0d6eafc36a16",
-            measurementId: "G-TM7S5967ML"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-    </script>
-    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="script.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
 </body>
 </html>
