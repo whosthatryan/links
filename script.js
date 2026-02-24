@@ -10,24 +10,30 @@ try {
     console.error('Error loading from localStorage:', e);
     items = [];
 }
+
+// State variables
 let deleteIndex = null;
 let deleteItemId = null;
-let currentParentId = null; // For creating subgroups
-let itemToMove = null; // For moving items between groups
-let toastTimeout = null; // Track toast timeout to prevent overlap
-let currentUser = null; // Firebase user
-let authMode = 'login'; // 'login' or 'register'
+let currentParentId = null;
+let itemToMove = null;
+let toastTimeout = null;
+let currentUser = null;
+let authMode = 'login';
 let isOnline = navigator.onLine;
+
+// Drag and Drop State
+let draggedItem = null;
 
 // Firebase configuration - replace with your own Firebase project config
 // Get this from Firebase Console > Project Settings > General > Your apps > Web app
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef123456"
+    apiKey: "AIzaSyBkgua27JXdyJQaOxflB4QuVbjX1zRDuag",
+    authDomain: "links-25539.firebaseapp.com",
+    projectId: "links-25539",
+    storageBucket: "links-25539.firebasestorage.app",
+    messagingSenderId: "263012790691",
+    appId: "1:263012790691:web:752314c03c0d6eafc36a16",
+    measurementId: "G-TM7S5967ML"
 };
 
 // Initialize Firebase if config is provided
@@ -62,16 +68,11 @@ function initFirebase() {
 function handleAuthStateChange(user) {
     currentUser = user;
     
-    // Get all instances of auth buttons (there may be duplicates in the DOM)
-    const authButtonsList = document.querySelectorAll('#authButtons');
-    const userInfoList = document.querySelectorAll('#userInfo');
-    const userEmailList = document.querySelectorAll('#userEmail');
-    
     if (user) {
         // User is signed in
-        authButtonsList.forEach(el => el.classList.add('hidden'));
-        userInfoList.forEach(el => el.classList.remove('hidden'));
-        userEmailList.forEach(el => el.textContent = user.email);
+        document.getElementById('authButtons').classList.add('hidden');
+        document.getElementById('userInfo').classList.remove('hidden');
+        document.getElementById('userEmail').textContent = sanitizeString(user.email);
         updateSyncStatus('syncing');
         
         // Load from cloud
@@ -81,9 +82,9 @@ function handleAuthStateChange(user) {
         setupCloudSync(user.uid);
     } else {
         // User is signed out
-        authButtonsList.forEach(el => el.classList.remove('hidden'));
-        userInfoList.forEach(el => el.classList.add('hidden'));
-        userEmailList.forEach(el => el.textContent = '');
+        document.getElementById('authButtons').classList.remove('hidden');
+        document.getElementById('userInfo').classList.add('hidden');
+        document.getElementById('userEmail').textContent = '';
         updateSyncStatus('local');
         
         // Load from localStorage
@@ -107,20 +108,20 @@ function updateSyncStatus(status) {
     if (!syncStatus) return;
     
     if (status === 'local') {
-        syncStatus.textContent = 'Local only';
-        syncStatus.className = 'text-slate-500 text-xs';
+        syncStatus.textContent = 'Local';
+        syncStatus.className = 'text-neutral-400 text-xs';
     } else if (status === 'syncing') {
         syncStatus.textContent = 'Syncing...';
-        syncStatus.className = 'text-yellow-400 text-xs';
+        syncStatus.className = 'text-neutral-600 text-xs';
     } else if (status === 'synced') {
-        syncStatus.textContent = 'Synced to cloud';
-        syncStatus.className = 'text-emerald-400 text-xs';
+        syncStatus.textContent = 'Synced';
+        syncStatus.className = 'text-neutral-900 text-xs';
     } else if (status === 'offline') {
-        syncStatus.textContent = 'Offline (local)';
-        syncStatus.className = 'text-orange-400 text-xs';
+        syncStatus.textContent = 'Offline';
+        syncStatus.className = 'text-neutral-500 text-xs';
     } else if (status === 'error') {
-        syncStatus.textContent = 'Sync error';
-        syncStatus.className = 'text-red-400 text-xs';
+        syncStatus.textContent = 'Error';
+        syncStatus.className = 'text-red-500 text-xs';
     }
 }
 
@@ -133,7 +134,13 @@ async function loadFromCloud(userId) {
         if (doc.exists) {
             const data = doc.data();
             if (data.items && Array.isArray(data.items)) {
-                items = data.items;
+                // Sanitize all loaded items to prevent corruption
+                items = data.items.map(item => ({
+                    ...item,
+                    title: sanitizeString(item.title, 'Untitled'),
+                    name: sanitizeString(item.name, 'Untitled Group'),
+                    url: sanitizeURL(item.url || '')
+                }));
                 normalizeData();
                 renderLinks();
                 updateSyncStatus('synced');
@@ -146,6 +153,7 @@ async function loadFromCloud(userId) {
     } catch (e) {
         console.error('Error loading from cloud:', e);
         updateSyncStatus('error');
+        showToast('Failed to sync from cloud', 'error');
     }
 }
 
@@ -243,7 +251,7 @@ function toggleAuthMode() {
 
 function showAuthError(message) {
     const errorEl = document.getElementById('authError');
-    errorEl.textContent = message;
+    errorEl.textContent = sanitizeString(message);
     errorEl.classList.remove('hidden');
 }
 
@@ -337,29 +345,13 @@ function normalizeData() {
             hasChanges = true;
         }
         
-        // Sanitize name and title using the centralized sanitizer
-        let name = sanitizeString(item.name, null);
-        let title = sanitizeString(item.title, null);
+        // Sanitize name for groups
+        let name = sanitizeString(item.name, 'Untitled Group');
+        if (name !== item.name) hasChanges = true;
         
-        // If name is corrupted but title is good, use title
-        if (!name && title) {
-            name = title;
-            hasChanges = true;
-        }
-        // If title is corrupted but name is good, use name  
-        if (!title && name) {
-            title = name;
-            hasChanges = true;
-        }
-        // If both are corrupted, set defaults
-        if (!name) {
-            name = 'Untitled Group';
-            hasChanges = true;
-        }
-        if (!title) {
-            title = 'Untitled';
-            hasChanges = true;
-        }
+        // Sanitize title for links
+        let title = sanitizeString(item.title, 'Untitled');
+        if (title !== item.title) hasChanges = true;
         
         // Ensure type is valid
         let type = item.type;
@@ -375,12 +367,20 @@ function normalizeData() {
             hasChanges = true;
         }
         
+        // Sanitize URL for links
+        let url = item.url;
+        if (type === 'link' && url) {
+            url = sanitizeURL(url);
+            if (url !== item.url) hasChanges = true;
+        }
+        
         return {
             ...item,
             id,
             type,
             name,
             title,
+            url,
             parentId
         };
     });
@@ -460,16 +460,6 @@ function isValidURL(string) {
     }
 }
 
-// Clean URL by removing tracking parameters
-function cleanURL(url) {
-    try {
-        const parsed = new URL(url);
-        return removeTrackingParams(parsed);
-    } catch (_) {
-        return url;
-    }
-}
-
 // HTML escape utility to prevent XSS
 function escapeHtml(text) {
     if (typeof text !== 'string') return '';
@@ -487,140 +477,135 @@ function escapeJsString(str) {
     return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
-// String sanitizer to prevent "undefinednull" and similar corruption
-function sanitizeString(value, defaultValue = '') {
-    // Handle null, undefined, or non-string types
-    if (value === null || value === undefined) {
+// String sanitizer to prevent undefined/null corruption
+function sanitizeString(str, defaultValue = '') {
+    // Handle non-string input
+    if (str === null || str === undefined) {
         return defaultValue;
     }
     
-    // Convert to string if not already
-    let str = String(value);
+    if (typeof str !== 'string') {
+        // Convert to string, but check for object types that might be problematic
+        try {
+            str = String(str);
+        } catch (e) {
+            return defaultValue;
+        }
+    }
     
-    // Check for corrupted values: "undefined", "null", "undefinednull", "nullundefined", etc.
-    const corruptedPatterns = ['undefined', 'null', 'undefinednull', 'nullundefined', 'undefined null', 'null undefined', 'undefined,null', 'null,undefined'];
-    const trimmed = str.trim().toLowerCase();
+    // Trim whitespace
+    str = str.trim();
     
-    if (corruptedPatterns.includes(trimmed) || trimmed === '' || trimmed === '""' || trimmed === "''") {
+    // Check for empty, null, undefined strings and their combinations (case-insensitive)
+    const lowerStr = str.toLowerCase();
+    const corruptionPatterns = [
+        'undefined', 'null', 'undefinednull', 'nullundefined',
+        'undefined null', 'null undefined', '""', "''", '""null',
+        'null""', 'nan', '[object object]', 'undefinedundefined',
+        'nullnull', 'null undefined null', 'undefined null undefined'
+    ];
+    
+    if (!str || corruptionPatterns.includes(lowerStr)) {
         return defaultValue;
     }
     
-    // Check if string contains these as substrings (e.g., "undefinednull something")
-    const hasCorruption = /^(undefined|null|undefinednull|nullundefined)+/i.test(str) || 
-                          /(undefined|null){2,}/i.test(str);
-    if (hasCorruption) {
+    // Clean up mixed corruption patterns (case-insensitive)
+    let cleaned = str;
+    
+    // Aggressively remove corruption patterns
+    cleaned = cleaned.replace(/undefined/gi, '');
+    cleaned = cleaned.replace(/null/gi, '');
+    cleaned = cleaned.replace(/""/g, '');
+    cleaned = cleaned.replace(/''/g, '');
+    cleaned = cleaned.replace(/\[object object\]/gi, '');
+    
+    // Clean up any resulting double spaces or remaining artifacts
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // Check if we ended up with nothing or just whitespace
+    if (!cleaned) {
         return defaultValue;
     }
     
-    return str;
+    // Final verification check
+    const finalCheck = cleaned.toLowerCase();
+    if (corruptionPatterns.includes(finalCheck)) {
+        return defaultValue;
+    }
+    
+    // Check for partial corruption (contains undefined or null as substring)
+    if (finalCheck.includes('undefined') || finalCheck.includes('null')) {
+        // Try one more aggressive cleanup
+        cleaned = cleaned.replace(/undefined/gi, '').replace(/null/gi, '').trim();
+        if (!cleaned) return defaultValue;
+    }
+    
+    return cleaned;
 }
 
-// Sanitize URL to prevent javascript: and data: protocols
+// URL sanitizer with tracking parameter removal
 function sanitizeURL(url) {
-    if (!url || typeof url !== 'string') {
-        return '';
+    if (typeof url !== 'string') return '';
+    let cleaned = sanitizeString(url);
+    if (!cleaned) return '';
+    
+    // Ensure protocol is present
+    if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
+        cleaned = 'https://' + cleaned;
     }
     
     try {
-        const parsed = new URL(url);
-        const allowedProtocols = ['http:', 'https:'];
-        if (!allowedProtocols.includes(parsed.protocol)) {
+        const urlObj = new URL(cleaned);
+        // Only allow http and https protocols
+        if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
             return '';
         }
+        
         // Remove tracking parameters
-        return removeTrackingParams(parsed);
-    } catch (e) {
-        // If invalid URL, check if it starts with allowed protocols
-        if (url.match(/^https?:\/\//i)) {
-            return url;
-        }
-        // Try adding https:// prefix
-        if (url.match(/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/)) {
-            return 'https://' + url;
-        }
-        return '';
-    }
-}
-
-// Remove common tracking parameters from URLs
-function removeTrackingParams(url) {
-    const trackingParams = [
-        // Google Analytics
-        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-        'utm_id', 'utm_source_platform', 'utm_creative_format', 'utm_marketing_tactic',
-        // Google Ads
-        'gclid', 'gclsrc', 'dclid',
-        // Facebook/Meta
-        'fbclid', 'fb_source', 'fb_ref',
-        // TikTok
-        'ttclid', 'tt_medium', 'tt_campaign',
-        // Twitter/X
-        'twclid', 'twitclid',
-        // Microsoft/Bing
-        'msclkid',
-        // Reddit
-        'rd_cid', 'reddit_campaign', 'reddit_source',
-        // LinkedIn
-        'li_fat_id', 'li_sugr',
-        // Pinterest
-        'epik', 'pp', 'utm_pinterest',
-        // Snapchat
-        'sc_cid', 'snapchat_source',
-        // YouTube
-        'si', 'feature', 'ab_channel',
-        // Generic
-        'ref', 'referral', 'referrer', 'source', 'medium', 'campaign',
-        'aff_id', 'affiliate', 'affiliate_id', 'aff_link',
-        'sub_id', 'subid', 'click_id', 'clickid',
-        'wbraid', 'gbraid', 'cid', 'ecid', 'ef_id',
-        'mkwid', 'pcrid', 'drip_id', 'mkt_tok',
-        // Email marketing
-        'mc_cid', 'mc_eid', 'ml_subscriber', 'ml_subscriber_hash',
-        // Other
-        'hsCtaTracking', '__hsfp', '__hssc', '__hstc', '_hsenc', '_hsmi',
-        'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src', 'hsa_ad', 'hsa_acc', 'hsa_net', 'hsa_kw',
-        'piwik_campaign', 'piwik_kwd', 'matomo_campaign', 'matomo_kwd',
-        'yclid', 'ysclid',
-        'cid', 'sid', 'mid', 'rid', 'pid'
-    ];
-    
-    const params = url.searchParams;
-    let removed = false;
-    
-    trackingParams.forEach(param => {
-        if (params.has(param)) {
-            params.delete(param);
-            removed = true;
-        }
-    });
-    
-    // Clean up hash fragments that contain tracking
-    if (url.hash) {
-        const hashParams = new URLSearchParams(url.hash.substring(1));
-        let hashChanged = false;
+        const trackingParams = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+            'utm_id', 'utm_source_platform', 'utm_creative_format', 'utm_marketing_tactic',
+            'fbclid', 'gclid', 'gclsrc', 'dclid', 'wbraid', 'gbraid', 'ttclid',
+            'twclid', 'msclkid', 'li_fat_id', 'mc_cid', 'mc_eid', 'ml_subscriber',
+            'ml_subscriber_hash', 'ref', 'referrer', 'source', 'aff_id', 'affiliate',
+            'click_id', 'sub_id', 'pid', 'cid', 'sid', 'rid', 'uid', 'vid',
+            'fb_source', 'fb_action_ids', 'fb_comment_id', 'utm_place', 'rd_cid',
+            'epik', 'sck', 'snr', 'si', 'feature', 'ab_channel', 'gad_source',
+            'gclid', 'dclid', 'zanpid', 'wickedid', 'vmcid', 'vmid', 'sb_referer_host',
+            'mkwid', 'pcrid', 'ef_id', 's_kwcid', 'dm_i', 'pd_rd', 'trk_contact',
+            'trk_msg', 'trk_module', 'trk_sid', 'ncid', 'n_cid', 'ssp_iab', 'ssp_iab',
+            'vero_id', 'vgo_ee', 'hsCtaTracking', 'ttclid', 'irclickid', 'irgwc',
+            'wbraid', 'gbraid', 'wickedid', 'oly_anon_id', 'oly_enc_id', 'itm_source',
+            'itm_medium', 'itm_campaign', 'itm_term', 'itm_content', 'pk_campaign',
+            'pk_kwd', 'pk_keyword', 'pk_source', 'pk_medium', 'pk_content', 'pk_cid',
+            'piwik_campaign', 'piwik_kwd', 'piwik_keyword', 'matomo_campaign',
+            'matomo_kwd', 'matomo_keyword', 'mtm_source', 'mtm_medium', 'mtm_campaign',
+            'mtm_keyword', 'mtm_content', 'mtm_cid', 'mtm_group', 'mtm_placement',
+            'utm_expid', 'utm_referrer', 'hsa_cam', 'hsa_grp', 'hsa_mt', 'hsa_src',
+            'hsa_ad', 'hsa_acc', 'hsa_net', 'hsa_kw', 'hsa_tgt', 'hsa_la', 'hsa_ol',
+            'hsa_ver', '_hsenc', '_hsmi', '__hssc', '__hstc', '__hsfp'
+        ];
         
         trackingParams.forEach(param => {
-            if (hashParams.has(param)) {
-                hashParams.delete(param);
-                hashChanged = true;
-            }
+            urlObj.searchParams.delete(param);
         });
         
-        if (hashChanged) {
-            const newHash = hashParams.toString();
-            url.hash = newHash ? '#' + newHash : '';
+        // Remove empty search params
+        if (!urlObj.search || urlObj.search === '?') {
+            urlObj.search = '';
         }
+        
+        return urlObj.toString();
+    } catch (e) {
+        return cleaned;
     }
-    
-    return url.toString();
 }
 
 function formatURL(url) {
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url;
+        return 'https://' + url;
     }
-    // Remove tracking parameters after formatting
-    return cleanURL(url);
+    return url;
 }
 
 function getDomainFromURL(url) {
@@ -704,10 +689,10 @@ function addLink() {
         return;
     }
 
-    // Format and validate
-    const formattedURL = formatURL(url);
+    // Sanitize URL and remove trackers
+    let formattedURL = sanitizeURL(url);
     
-    if (!isValidURL(formattedURL)) {
+    if (!formattedURL || !isValidURL(formattedURL)) {
         showError('Please enter a valid URL (e.g., https://example.com)');
         return;
     }
@@ -719,19 +704,19 @@ function addLink() {
         return;
     }
 
+    // Sanitize title
+    title = sanitizeString(title);
+    
     // If no title provided, use domain as default
     if (!title) {
         title = getDomainFromURL(formattedURL);
     }
 
-    // Sanitize title to prevent corruption
-    title = sanitizeString(title, getDomainFromURL(formattedURL));
-
     // Add to array at root level (parentId: null)
     const newLink = {
         id: Date.now(),
         type: 'link',
-        url: sanitizeURL(formattedURL),
+        url: formattedURL,
         title: title,
         parentId: null,
         createdAt: new Date().toISOString()
@@ -793,7 +778,7 @@ function closeGroupModal() {
 
 function saveGroup() {
     const rawName = document.getElementById('groupNameInput').value;
-    const name = sanitizeString(rawName, 'Untitled Group').trim() || 'Untitled Group';
+    const name = sanitizeString(rawName, 'Untitled Group');
     
     const newGroup = {
         id: Date.now(),
@@ -881,7 +866,7 @@ function openMoveModal(itemId) {
     let html = `
         <div class="space-y-1">
             <button onclick="moveItemToGroup(${itemId}, null)" 
-                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${(item.parentId === null || item.parentId === undefined) ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
+                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-white/10 transition-colors ${(item.parentId === null || item.parentId === undefined) ? 'bg-white/10 text-white' : 'text-gray-300'}">
                 <i data-lucide="home" class="w-4 h-4 inline mr-2"></i>
                 Root (no group)
             </button>
@@ -890,15 +875,13 @@ function openMoveModal(itemId) {
     // Render all groups at same level (no indentation needed)
     groups.forEach(group => {
         const isCurrentParent = item.parentId === group.id;
-        // Ensure group name is valid
-        const groupName = (group.name && typeof group.name === 'string' && group.name !== 'undefined' && group.name !== 'null')
-            ? group.name 
-            : 'Untitled Group';
+        // Use sanitizeString to ensure group name is clean
+        const groupName = sanitizeString(group.name, 'Untitled Group');
         const safeName = escapeHtml(groupName);
         html += `
             <button onclick="moveItemToGroup(${itemId}, ${group.id})" 
-                    class="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 transition-colors ${isCurrentParent ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-300'}">
-                <i data-lucide="folder" class="w-4 h-4 inline mr-2 text-indigo-400 ml-2"></i>
+                    class="w-full text-left px-3 py-2 rounded-sm hover:bg-white/10 transition-colors ${isCurrentParent ? 'bg-white/10 text-white' : 'text-gray-300'}">
+                <i data-lucide="folder" class="w-4 h-4 inline mr-2 text-gray-400 ml-2"></i>
                 ${safeName}
             </button>
         `;
@@ -1016,14 +999,8 @@ function deleteItem(id) {
     if (item.type === 'group') {
         typeSpan.textContent = 'Group';
         const childCount = getAllDescendants(id).length;
-        // Ensure name is valid for display - handle all corruption cases
-        let displayName = 'Untitled Group';
-        if (item.name && typeof item.name === 'string') {
-            const cleanName = item.name.trim();
-            if (cleanName && cleanName !== 'undefined' && cleanName !== 'null' && cleanName !== 'undefinednull') {
-                displayName = cleanName;
-            }
-        }
+        // Use sanitizeString to ensure name is clean
+        const displayName = sanitizeString(item.name, 'Untitled Group');
         textP.textContent = `Delete "${displayName}" and all ${childCount} items inside? This action cannot be undone.`;
     } else {
         typeSpan.textContent = 'Link';
@@ -1064,12 +1041,19 @@ function confirmDelete() {
             const descendants = getAllDescendants(deleteItemId);
             const idsToDelete = [deleteItemId, ...descendants.map(d => d.id)];
             items = items.filter(i => !idsToDelete.includes(i.id));
-        } else if (deleteIndex >= 0 && deleteIndex < items.length) {
-            // Safety check: only delete if index is valid
-            items.splice(deleteIndex, 1);
         } else {
-            console.error('Delete failed: invalid index or item not found');
+            // Delete single item by ID instead of index to avoid index mismatch issues
+            items = items.filter(i => i.id !== deleteItemId);
         }
+        
+        // Sanitize all remaining items to ensure no corruption from deletion
+        items = items.map(item => ({
+            ...item,
+            title: sanitizeString(item.title, item.type === 'link' ? 'Untitled' : 'Untitled Group'),
+            name: sanitizeString(item.name, 'Untitled Group'),
+            url: item.type === 'link' ? sanitizeURL(item.url || '') : undefined
+        }));
+        
         saveItems();
         renderLinks();
         closeDeleteModal();
@@ -1091,10 +1075,10 @@ async function copyToClipboard(url, button) {
     try {
         await navigator.clipboard.writeText(url);
         
-        // Visual feedback on button
-        button.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span class="text-sm font-medium">Copied!</span>`;
-        button.classList.remove('text-slate-400', 'hover:text-indigo-400', 'hover:bg-indigo-500/10');
-        button.classList.add('text-emerald-400', 'bg-emerald-500/10', 'copied-animation');
+        // Visual feedback on button - artistic style
+        button.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-500"></i>`;
+        button.classList.remove('text-neutral-400', 'hover:text-neutral-700', 'hover:bg-neutral-100');
+        button.classList.add('text-emerald-600', 'bg-emerald-50', 'scale-110');
         lucide.createIcons();
         
         // Show toast
@@ -1103,8 +1087,8 @@ async function copyToClipboard(url, button) {
         // Reset button after 2 seconds
         setTimeout(() => {
             button.innerHTML = originalHTML;
-            button.classList.remove('text-emerald-400', 'bg-emerald-500/10', 'copied-animation');
-            button.classList.add('text-slate-400', 'hover:text-indigo-400', 'hover:bg-indigo-500/10');
+            button.classList.remove('text-emerald-600', 'bg-emerald-50', 'scale-110');
+            button.classList.add('text-neutral-400', 'hover:text-neutral-700', 'hover:bg-neutral-100');
             lucide.createIcons();
         }, 2000);
         
@@ -1126,10 +1110,9 @@ async function copyToClipboard(url, button) {
     }
 }
 
-// Drag and Drop State
-let draggedItem = null;
+// Additional drag state
 let dragOverItem = null;
-let dragOverPosition = null; // 'before' or 'after'
+let dragOverPosition = null;
 
 function renderLinks() {
     const container = document.getElementById('linksContainer');
@@ -1139,10 +1122,18 @@ function renderLinks() {
     const clearBtn = document.getElementById('clearAllBtn');
     const newGroupBtn = document.getElementById('newGroupBtn');
     
-    // Ensure items is an array
+    // Ensure items is an array and sanitize all items before rendering
     if (!Array.isArray(items)) {
         items = [];
     }
+    
+    // Extra safety: sanitize all items before rendering to catch any corruption
+    items = items.map(item => ({
+        ...item,
+        title: sanitizeString(item.title, 'Untitled'),
+        name: sanitizeString(item.name, 'Untitled Group'),
+        url: sanitizeURL(item.url || '')
+    }));
     
     const links = items.filter(i => i.type === 'link');
     const groups = items.filter(i => i.type === 'group');
@@ -1153,17 +1144,17 @@ function renderLinks() {
     
     if (items.length === 0) {
         container.innerHTML = '';
-        // If emptyState was destroyed by previous innerHTML, recreate it
+        // If emptyState was destroyed by previous innerHTML, recreate it with monochrome styling
         if (!emptyState) {
             emptyState = document.createElement('div');
             emptyState.id = 'emptyState';
-            emptyState.className = 'text-center py-16 bg-slate-800/50 backdrop-blur rounded-2xl border-2 border-dashed border-slate-700';
+            emptyState.className = 'text-center py-24 bg-[#0a0a0a]/40 rounded-sm border border-dashed border-white/10 hover:border-white/20 transition-all duration-700';
             emptyState.innerHTML = `
-                <div class="inline-flex items-center justify-center w-12 h-12 bg-slate-700 rounded-full mb-3">
-                    <i data-lucide="link" class="w-6 h-6 text-slate-500"></i>
+                <div class="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-[#262626]/50 to-[#171717]/50 rounded-sm mb-8 border border-white/5">
+                    <i data-lucide="link" class="w-6 h-6 text-gray-500 opacity-50"></i>
                 </div>
-                <p class="text-slate-400 font-medium">No links added yet</p>
-                <p class="text-slate-500 text-sm mt-1">Add your first link above to get started</p>
+                <p class="text-gray-300 font-light text-sm tracking-widest uppercase">The canvas awaits</p>
+                <p class="text-gray-500 text-xs mt-3 font-light tracking-wide">Add your first moment</p>
             `;
         }
         container.appendChild(emptyState);
@@ -1180,13 +1171,11 @@ function renderLinks() {
         emptyState.classList.add('hidden');
     }
     
-    // Render hierarchical structure - get root items (null or undefined parentId)
+    // Render hierarchical structure
     const rootItems = items.filter(item => item.parentId === null || item.parentId === undefined);
     
-    // If no root items but items exist, they might be orphaned - show them at root
     let html = '';
     if (rootItems.length === 0 && items.length > 0) {
-        // Fallback: render all items at root level to prevent disappearing
         items.forEach((item, index) => {
             if (item.type === 'group') {
                 html += renderGroup(item, 0, index, items.length);
@@ -1200,10 +1189,7 @@ function renderLinks() {
     
     container.innerHTML = html || renderItemsRecursive(null, 0);
     
-    // Re-initialize icons
     lucide.createIcons();
-    
-    // Initialize drag and drop
     initializeDragAndDrop();
 }
 
@@ -1260,68 +1246,61 @@ function renderGroup(group, level, index, totalSiblings) {
     const hasChildren = children.length > 0;
     const expandIcon = group.isExpanded ? 'chevron-down' : 'chevron-right';
     const childrenClass = group.isExpanded ? 'expanded' : 'collapsed';
-    // Ensure group.name is a valid string - handle all corruption cases including "undefinednull"
-    let groupName = group.name;
-    if (typeof groupName !== 'string') {
-        groupName = String(groupName || '');
-    }
-    if (!groupName || groupName === 'undefined' || groupName === 'null' || groupName === 'undefinednull' || groupName === 'nullundefined' || !groupName.trim()) {
-        groupName = 'Untitled Group';
-    }
+    // Double-sanitize to ensure no corruption gets through
+    const groupName = sanitizeString(group.name, 'Untitled Collection');
     const safeName = escapeHtml(groupName);
     const safeJsName = escapeJsString(groupName);
     
-    // Only show expand/collapse if group has children
     const expandButton = hasChildren ? `
         <button onclick="toggleGroup(${group.id})" 
-                class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded hover:bg-slate-600 transition-colors text-slate-400 hover:text-white"
+                class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-sm hover:bg-white/10 transition-all duration-500 text-gray-400 hover:text-white"
                 title="${group.isExpanded ? 'Collapse' : 'Expand'}">
-            <i data-lucide="${expandIcon}" class="w-4 h-4"></i>
+            <i data-lucide="${expandIcon}" class="w-4 h-4 opacity-60"></i>
         </button>
-    ` : '<div class="w-6"></div>';
+    ` : '<div class="w-8"></div>';
     
     return `
-        <div class="group-item ${indentClass}" data-id="${group.id}" data-type="group" draggable="true">
-            <div class="bg-slate-800/90 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-200 overflow-hidden">
+        <div class="group-item ${indentClass} animate-emerge hover-lift" data-id="${group.id}" data-type="group" draggable="true" style="animation-delay: ${index * 0.1}s;">
+            <div class="bg-[#0a0a0a]/60 backdrop-blur-sm rounded-sm border border-white/10 hover:border-white/20 transition-all duration-700 overflow-hidden">
                 <!-- Group Header -->
-                <div class="flex items-center gap-3 p-3 bg-slate-700/30">
+                <div class="flex items-center gap-3 p-4 bg-gradient-to-r from-[#141414]/80 to-[#0a0a0a]/60">
                     <!-- Drag Handle -->
-                    <div class="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 p-1 rounded hover:bg-slate-700" data-drag-handle>
-                        <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+                    <div class="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 p-2 rounded-sm hover:bg-white/5 transition-all duration-500" data-drag-handle>
+                        <i data-lucide="grip-vertical" class="w-4 h-4 opacity-50"></i>
                     </div>
                     
                     ${expandButton}
                     
                     <!-- Icon -->
-                    <div class="flex-shrink-0 w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-400">
-                        <i data-lucide="folder" class="w-4 h-4"></i>
+                    <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-[#262626]/60 to-[#171717]/50 rounded-sm flex items-center justify-center text-white shadow-sm opacity-80 border border-white/5">
+                        <i data-lucide="folder" class="w-4 h-4 opacity-70"></i>
                     </div>
                     
                     <!-- Name -->
                     <div class="flex-1 min-w-0" id="title-container-${group.id}">
-                        <div class="flex items-center gap-2">
-                            <h3 class="text-white font-semibold truncate" title="${safeName}">${safeName}</h3>
-                            <span class="text-xs text-slate-500 bg-slate-700/50 px-2 py-0.5 rounded-full">${getAllDescendants(group.id).length} items</span>
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-white font-light truncate text-sm tracking-wide" title="${safeName}">${safeName}</h3>
+                            <span class="text-xs text-gray-500 bg-white/5 px-2.5 py-1 rounded-sm font-light">${getAllDescendants(group.id).length}</span>
                             <button onclick="startEditingTitle(${group.id}, '${safeJsName}')" 
-                                    class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400"
-                                    title="Rename group">
-                                <i data-lucide="pencil" class="w-3 h-3"></i>
+                                    class="opacity-0 group-hover:opacity-100 transition-all duration-500 p-2 rounded-sm hover:bg-white/10 text-gray-400 hover:text-white"
+                                    title="Rename">
+                                <i data-lucide="pencil" class="w-3.5 h-3.5 opacity-60"></i>
                             </button>
                         </div>
                     </div>
                     
                     <!-- Actions -->
-                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-500">
                         <button onclick="deleteItem(${group.id})" 
-                                class="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
-                                title="Delete group">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                class="p-2 rounded-sm hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all duration-500"
+                                title="Remove">
+                            <i data-lucide="trash-2" class="w-4 h-4 opacity-60"></i>
                         </button>
                     </div>
                 </div>
                 
-                <!-- Children Container - Only links allowed inside, no subgroups -->
-                <div class="group-children ${childrenClass} bg-slate-800/30">
+                <!-- Children Container -->
+                <div class="group-children ${childrenClass} bg-black/20 border-t border-white/5">
                     ${renderGroupChildren(group.id)}
                 </div>
             </div>
@@ -1335,62 +1314,62 @@ function renderLink(link, level, index, totalSiblings) {
     const isLong = link.url && link.url.length > 50;
     const displayUrl = isLong ? link.url.substring(0, 50) + '...' : (link.url || '');
     
-    // Sanitize title - handle all corruption cases
-    const title = sanitizeString(link.title, domain || 'Untitled');
+    // Double-sanitize to ensure no corruption gets through
+    const title = sanitizeString(link.title, sanitizeString(domain, 'Untitled'));
     
     const safeTitle = escapeHtml(title);
-    const safeUrl = escapeHtml(link.url || '');
-    const safeDisplayUrl = escapeHtml(displayUrl);
+    const safeUrl = escapeHtml(sanitizeString(link.url, ''));
+    const safeDisplayUrl = escapeHtml(sanitizeString(displayUrl, ''));
     const safeJsTitle = escapeJsString(title);
-    const safeJsUrl = escapeJsString(link.url || '');
+    const safeJsUrl = escapeJsString(sanitizeString(link.url, ''));
     
     return `
-        <div class="link-item ${indentClass} bg-slate-800 rounded-xl p-3 shadow-sm border border-slate-700 hover:shadow-md hover:border-slate-600 transition-all duration-200 group" 
-             data-id="${link.id}" data-type="link" draggable="true">
-            <div class="flex items-center gap-3">
+        <div class="link-item ${indentClass} bg-[#0a0a0a]/60 backdrop-blur-sm rounded-sm border border-white/10 hover:border-white/20 transition-all duration-700 overflow-hidden group animate-emerge hover-lift" 
+             data-id="${link.id}" data-type="link" draggable="true" style="animation-delay: ${index * 0.1}s;">
+            <div class="flex items-center gap-3 p-4 bg-gradient-to-r from-[#141414]/60 to-[#0a0a0a]/40">
                 <!-- Drag Handle -->
-                <div class="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 p-1 rounded hover:bg-slate-700 flex-shrink-0" data-drag-handle>
-                    <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+                <div class="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 p-2 rounded-sm hover:bg-white/5 transition-all duration-500" data-drag-handle>
+                    <i data-lucide="grip-vertical" class="w-4 h-4 opacity-50"></i>
                 </div>
                 
                 <!-- Favicon -->
-                <div class="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center text-indigo-400">
-                    <i data-lucide="link" class="w-4 h-4"></i>
+                <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-[#262626]/60 to-[#171717]/50 rounded-sm flex items-center justify-center text-gray-400 shadow-sm border border-white/5">
+                    <i data-lucide="link" class="w-4 h-4 opacity-70"></i>
                 </div>
                 
                 <!-- Link Info -->
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2" id="title-container-${link.id}">
-                        <h3 class="text-white font-semibold truncate text-sm" title="${safeTitle}">${safeTitle}</h3>
+                    <div class="flex items-center gap-3" id="title-container-${link.id}">
+                        <h3 class="text-white font-light truncate text-sm tracking-wide" title="${safeTitle}">${safeTitle}</h3>
                         <button onclick="startEditingTitle(${link.id}, '${safeJsTitle}')" 
-                                class="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400"
+                                class="opacity-0 group-hover:opacity-100 transition-all duration-500 p-2 rounded-sm hover:bg-white/10 text-gray-400 hover:text-white"
                                 title="Edit title">
-                            <i data-lucide="pencil" class="w-3 h-3"></i>
+                            <i data-lucide="pencil" class="w-3.5 h-3.5 opacity-60"></i>
                         </button>
                     </div>
                     <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" 
-                       class="block text-slate-400 text-xs truncate hover:text-indigo-400 transition-colors" 
+                       class="block text-gray-500 text-xs truncate hover:text-gray-300 transition-colors duration-500 font-light mt-0.5" 
                        title="${safeUrl}">
                         ${safeDisplayUrl}
                     </a>
                 </div>
                 
-                <!-- Actions - Always visible on mobile, hover on desktop -->
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity action-buttons">
+                <!-- Actions -->
+                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-500">
                     <button onclick="copyToClipboard('${safeJsUrl}', this)" 
-                            class="p-1.5 rounded hover:bg-indigo-500/20 text-slate-400 hover:text-indigo-400 transition-colors"
+                            class="p-2 rounded-sm hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-500"
                             title="Copy to clipboard">
-                        <i data-lucide="copy" class="w-4 h-4"></i>
+                        <i data-lucide="copy" class="w-4 h-4 opacity-60"></i>
                     </button>
                     <button onclick="openMoveModal(${link.id})" 
-                            class="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors"
+                            class="p-2 rounded-sm hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-500"
                             title="Move to group">
-                        <i data-lucide="folder-input" class="w-4 h-4"></i>
+                        <i data-lucide="folder-input" class="w-4 h-4 opacity-60"></i>
                     </button>
                     <button onclick="deleteItem(${link.id})" 
-                            class="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                            class="p-2 rounded-sm hover:bg-white/10 text-gray-400 hover:text-red-400 transition-all duration-500"
                             title="Delete link">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <i data-lucide="trash-2" class="w-4 h-4 opacity-60"></i>
                     </button>
                 </div>
             </div>
@@ -1660,24 +1639,22 @@ function showToast(message = 'Copied to clipboard!', type = 'success') {
     const icon = toast.querySelector('i');
     const text = toast.querySelector('span');
     
-    // Clear previous timeout to prevent early dismissal
     if (toastTimeout) {
         clearTimeout(toastTimeout);
     }
     
     text.textContent = message;
     
-    // Reset classes
-    toast.classList.remove('bg-emerald-500', 'bg-red-500', 'bg-blue-500');
+    toast.classList.remove('bg-neutral-900', 'bg-red-600', 'bg-blue-600');
     
     if (type === 'error') {
-        toast.classList.add('bg-red-500');
+        toast.classList.add('bg-red-600');
         icon.setAttribute('data-lucide', 'x-circle');
     } else if (type === 'info') {
-        toast.classList.add('bg-blue-500');
+        toast.classList.add('bg-blue-600');
         icon.setAttribute('data-lucide', 'info');
     } else {
-        toast.classList.add('bg-emerald-500');
+        toast.classList.add('bg-neutral-900');
         icon.setAttribute('data-lucide', 'check-circle');
     }
     lucide.createIcons();
@@ -1695,12 +1672,11 @@ function showError(message) {
     errorMsg.querySelector('span').textContent = message;
     errorMsg.classList.remove('hidden');
     
-    // Shake animation on input
     const input = document.getElementById('linkInput');
-    input.classList.add('border-red-500', 'ring-2', 'ring-red-200');
+    input.classList.add('border-red-500', 'ring-2', 'ring-red-100');
     
     setTimeout(() => {
-        input.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
+        input.classList.remove('border-red-500', 'ring-2', 'ring-red-100');
     }, 2000);
 }
 
@@ -1708,22 +1684,6 @@ function hideError() {
     const errorMsg = document.getElementById('errorMsg');
     errorMsg.classList.add('hidden');
 }
-
-// Close modal on outside click
-document.getElementById('deleteModal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-        closeDeleteModal();
-    }
-});
-
-// Keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeDeleteModal();
-        closeGroupModal();
-        closeMoveModal();
-    }
-});
 
 // Close modals on outside click
 document.getElementById('deleteModal').addEventListener('click', (e) => {
@@ -1737,4 +1697,14 @@ document.getElementById('moveModal').addEventListener('click', (e) => {
 });
 document.getElementById('authModal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeAuthModal();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeDeleteModal();
+        closeGroupModal();
+        closeMoveModal();
+        closeAuthModal();
+    }
 });
